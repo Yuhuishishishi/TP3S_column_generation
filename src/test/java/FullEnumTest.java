@@ -15,7 +15,7 @@ import java.util.List;
  */
 public class FullEnumTest {
 
-    private String filepath = "C:\\Users\\yuhui\\Desktop\\TP3S_cp\\data\\157 - orig.tp3s";
+    private String filepath = "/home/yuhui/Documents/TP3S_cp/data/157 - orig.tp3s";
 
     @Test
     public void testGetTests() throws Exception {

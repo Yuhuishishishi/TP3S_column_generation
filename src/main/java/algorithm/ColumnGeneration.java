@@ -1,7 +1,6 @@
 package algorithm;
 
-import algorithm.pricer.CPPricer;
-import algorithm.pricer.EnumPricer;
+import algorithm.pricer.CPOPricer;
 import algorithm.pricer.Pricer;
 import data.DataInstance;
 import gurobi.*;
@@ -62,7 +61,7 @@ public class ColumnGeneration implements Algorithm{
         System.out.printf("Total sequences: %d\n", seqList.size());
         List<Column> colList = new ArrayList<>();
         // pair with release to create columns
-        seqList.stream().forEach(
+        seqList.forEach(
                 seq -> DataInstance.getInstance().getVehicleReleaseList()
                         .forEach(release -> colList.add(new Column(seq, release)))
         );
@@ -88,10 +87,10 @@ public class ColumnGeneration implements Algorithm{
 
             final int maxIter = 1000;
             int iterTimes = 0;
+            Pricer pricer = new CPOPricer();
 
 //            Pricer pricer = new EnumPricer();
             while (iterTimes++ < maxIter) {
-                Pricer pricer = new CPPricer();
 
                 model.optimize();
                 // grb dual information

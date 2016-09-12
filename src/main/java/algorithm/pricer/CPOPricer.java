@@ -16,7 +16,7 @@ import java.util.Map;
  * Yuhui Shi - University of Michigan
  * academic use only
  */
-public class CPPricer implements Pricer {
+public class CPOPricer implements Pricer {
     private IloCP solver;
     private IloIntVar[] testAtPosition;
     private IloIntVar[] startTimeAtPosition;
@@ -40,7 +40,7 @@ public class CPPricer implements Pricer {
 
             if (this.solver.solve()) {
                 // parse the solution
-                this.reducedCost = this.solver.getValue(this.reducedCostExpr);
+//                this.reducedCost = this.solver.getValue(this.reducedCostExpr);
                 Column col = parseSolution(this.solver);
                 candidates.add(col);
             }
@@ -213,7 +213,7 @@ public class CPPricer implements Pricer {
             }
         }
 //        model.setOut(null);
-        buildNegReducedCostConstr(model, testDual, vehicleDual);
+//        buildNegReducedCostConstr(model, testDual, vehicleDual);
         return model;
     }
 }
