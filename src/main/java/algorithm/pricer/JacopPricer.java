@@ -60,6 +60,7 @@ public class JacopPricer implements Pricer{
                 .toArray();
         final int[] durArr = Arrays.copyOf(DataInstance.getInstance().getTestArr().stream()
                 .mapToInt(TestRequest::getDur).toArray(), numTests+1); // dummy test
+
 //        final int[] prepArr = Arrays.copyOf(DataInstance.getInstance().getTestArr().stream()
 //                .mapToInt(TestRequest::getPrep).toArray(), numTests+1); // dummy test
         final int[] tidArr = DataInstance.getInstance().getTidList().stream().mapToInt(Integer::intValue).toArray();
@@ -68,6 +69,7 @@ public class JacopPricer implements Pricer{
 
         final int[] deadlineArr = Arrays.copyOf(DataInstance.getInstance().getTestArr().stream()
                 .mapToInt(TestRequest::getDeadline).toArray(), numTests+1);
+        deadlineArr[deadlineArr.length-1] = horizonEnd;
         final int[] testDualArr = Arrays.copyOf(
                 DataInstance.getInstance().getTidList().stream()
                         .mapToDouble(e -> testDual.get(e)*-1).mapToInt(e -> (int) Math.round(e)) // reverted the sign
@@ -91,7 +93,7 @@ public class JacopPricer implements Pricer{
 
         // auxiliary variables
         IntVar vehicleReleaseVar = new IntVar(model, 0, Arrays.stream(releaseArr).max().getAsInt());
-        model.impose(new Element(selectVehicle, releaseArr, vehicleReleaseVar, 1));
+        model.impose(new Element(selectVehicle, releaseArr, vehicleReleaseVar, -1));
 
         IntVar[] durAtPosition = new IntVar[numSlots];
 //        IntVar[] prepAtPosition = new IntVar[numSlots];
@@ -101,16 +103,16 @@ public class JacopPricer implements Pricer{
 
         for (int p = 0; p < numSlots; p++) {
             durAtPosition[p] = new IntVar(model, 0, horizonEnd);
-            model.impose(new Element(testAtPosition[p], durArr, durAtPosition[p], 1));
+            model.impose(new Element(testAtPosition[p], durArr, durAtPosition[p], -1));
 
 //            prepAtPosition[p] = new IntVar(model);
 //            model.impose(new Element(testAtPosition[p], prepArr, prepAtPosition[p], 1));
 
             testReleaseAtPosition[p] = new IntVar(model, horizonStart, horizonEnd);
-            model.impose(new Element(testAtPosition[p], testReleaseArr, testReleaseAtPosition[p], 1));
+            model.impose(new Element(testAtPosition[p], testReleaseArr, testReleaseAtPosition[p], -1));
 
             deadlineAtPosition[p] = new IntVar(model, horizonStart, horizonEnd);
-            model.impose(new Element(testAtPosition[p], deadlineArr, deadlineAtPosition[p], 1));
+            model.impose(new Element(testAtPosition[p], deadlineArr, deadlineAtPosition[p], -1));
         }
 
         for (int t = 0; t < numTests; t++) {
@@ -162,7 +164,7 @@ public class JacopPricer implements Pricer{
                         && !DataInstance.getInstance().getRelation(tid2,tid1))
                     model.impose(new Not(
                             new And(new XeqC(occurenceOfTest[i], 1),
-                                    new XeqC(occurenceOfTest[i], 1))
+                                    new XeqC(occurenceOfTest[j], 1))
                     ));
                 else if (!DataInstance.getInstance().getRelation(tid1, tid2)) {
                     for (int p = 0; p < numSlots; p++) {
@@ -201,14 +203,14 @@ public class JacopPricer implements Pricer{
         // vehicle contribution
         IntVar vehicleContrib = new IntVar(model, Arrays.stream(vehicleDualArr).min().getAsInt(),
                 Arrays.stream(vehicleDualArr).max().getAsInt());
-        model.impose(new Element(selectVehicle, vehicleDualArr, vehicleContrib, 1));
+        model.impose(new Element(selectVehicle, vehicleDualArr, vehicleContrib, -1));
 //
         // test contribution
         IntVar[] testContribAtPosition = new IntVar[numSlots];
         for (int p = 0; p < numSlots; p++) {
             testContribAtPosition[p] = new IntVar(model, Arrays.stream(testDualArr).min().getAsInt(),
                     Arrays.stream(testDualArr).max().getAsInt());
-            model.impose(new Element(testAtPosition[p], testDualArr, testContribAtPosition[p], 1));
+            model.impose(new Element(testAtPosition[p], testDualArr, testContribAtPosition[p], -1));
         }
         IntVar totalTestContrib = new IntVar(model, Arrays.stream(testDualArr).sum(), 0);
         model.impose(new SumInt(model, testContribAtPosition, "==", totalTestContrib));
@@ -240,6 +242,9 @@ public class JacopPricer implements Pricer{
             for (int p = 0; p < numSlots; p++) {
                 System.out.println("testAtPosition = " + testAtPosition[p]);
                 System.out.println("startTimeAtPosition = " + startTimeAtPosition[p]);
+                System.out.println("tardinessAtPosition = " + tardinessAtPosition[p]);
+                System.out.println("durAtPosition = " + durAtPosition[p]);
+                System.out.println("deadlineAtPosition[p] = " + deadlineAtPosition[p]);
             }
             System.out.println("rc = " + rc);
         }
