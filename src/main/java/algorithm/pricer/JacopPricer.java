@@ -4,19 +4,20 @@ import algorithm.Column;
 import data.DataInstance;
 import data.TestRequest;
 import org.jacop.constraints.*;
-import org.jacop.core.BooleanVar;
+import org.jacop.core.Domain;
 import org.jacop.core.IntVar;
 import org.jacop.core.Store;
 import org.jacop.floats.constraints.ElementFloat;
 import org.jacop.floats.constraints.LinearFloat;
+import org.jacop.floats.constraints.PltC;
 import org.jacop.floats.constraints.XeqP;
 import org.jacop.floats.core.FloatVar;
+import org.jacop.floats.search.SmallestDomainFloat;
+import org.jacop.floats.search.SplitSelectFloat;
 import org.jacop.search.*;
 import utils.Global;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.IntStream;
 
 /**
@@ -35,18 +36,19 @@ public class JacopPricer implements Pricer{
     @Override
     public List<Column> price(Map<Integer, Double> testDual, Map<Integer, Double> vehicleDual) {
 
-        buildModel(testDual, vehicleDual);
-
-
-        return null;
+        Column candidate = buildModel(testDual, vehicleDual);
+        if (null==candidate)
+            return new ArrayList<>();
+        else
+            return Collections.singletonList(candidate);
     }
 
     @Override
     public double getReducedCost() {
-        return 0;
+        return reducedCost;
     }
 
-    private Store buildModel(Map<Integer, Double> testDual, Map<Integer, Double> vehicleDual) {
+    private Column buildModel(Map<Integer, Double> testDual, Map<Integer, Double> vehicleDual) {
         Store model = new Store();
 
         // parameters
@@ -60,6 +62,8 @@ public class JacopPricer implements Pricer{
                 .toArray();
         final int[] durArr = Arrays.copyOf(DataInstance.getInstance().getTestArr().stream()
                 .mapToInt(TestRequest::getDur).toArray(), numTests+1); // dummy test
+        final int[] prepArr = Arrays.copyOf(DataInstance.getInstance().getTestArr().stream()
+                .mapToInt(TestRequest::getPrep).toArray(), numTests+1); // dummy test
 
 //        final int[] prepArr = Arrays.copyOf(DataInstance.getInstance().getTestArr().stream()
 //                .mapToInt(TestRequest::getPrep).toArray(), numTests+1); // dummy test
@@ -70,13 +74,13 @@ public class JacopPricer implements Pricer{
         final int[] deadlineArr = Arrays.copyOf(DataInstance.getInstance().getTestArr().stream()
                 .mapToInt(TestRequest::getDeadline).toArray(), numTests+1);
         deadlineArr[deadlineArr.length-1] = horizonEnd;
-        final int[] testDualArr = Arrays.copyOf(
+        final double[] testDualArr = Arrays.copyOf(
                 DataInstance.getInstance().getTidList().stream()
-                        .mapToDouble(e -> testDual.get(e)*-1).mapToInt(e -> (int) Math.round(e)) // reverted the sign
+                        .mapToDouble(e -> testDual.get(e)*-1) //.mapToInt(e -> (int) Math.round(e)) // reverted the sign
                         .toArray(),
                 numTests+1);
-        final int[] vehicleDualArr = DataInstance.getInstance().getVehicleReleaseList().stream()
-                .mapToDouble(e -> vehicleDual.get(e)*-1).mapToInt(e -> (int) Math.round(e)) // reverted the sign
+        final double[] vehicleDualArr = DataInstance.getInstance().getVehicleReleaseList().stream()
+                .mapToDouble(e -> vehicleDual.get(e)*-1)//.mapToInt(e -> (int) Math.round(e)) // reverted the sign
                 .toArray();
 
 
@@ -98,6 +102,7 @@ public class JacopPricer implements Pricer{
         IntVar[] durAtPosition = new IntVar[numSlots];
 //        IntVar[] prepAtPosition = new IntVar[numSlots];
         IntVar[] testReleaseAtPosition = new IntVar[numSlots];
+        IntVar[] prepDurAtPosition = new IntVar[numSlots];
         IntVar[] deadlineAtPosition = new IntVar[numSlots];
         IntVar[] occurenceOfTest = new IntVar[numTests];
 
@@ -113,27 +118,29 @@ public class JacopPricer implements Pricer{
 
             deadlineAtPosition[p] = new IntVar(model, horizonStart, horizonEnd);
             model.impose(new Element(testAtPosition[p], deadlineArr, deadlineAtPosition[p], -1));
+
+            prepDurAtPosition[p] = new IntVar(model, 0, Arrays.stream(durArr).max().getAsInt());
+            model.impose(new Element(testAtPosition[p], prepArr, prepDurAtPosition[p], -1));
         }
 
         for (int t = 0; t < numTests; t++) {
-            PrimitiveConstraint[] isTestUsed = new PrimitiveConstraint[numSlots];
-            for (int p = 0; p < numSlots; p++) {
-                isTestUsed[p] = new XeqC(testAtPosition[p], t);
-            }
             occurenceOfTest[t] = new IntVar(model, 0, numSlots);
-
             model.impose(new Count(testAtPosition, occurenceOfTest[t], t));
         }
 
 
         // constraints
         // start after the selected vehicle is released
-        model.impose(new XgteqY(testAtPosition[0], vehicleReleaseVar));
+        model.impose(new XgteqY(startTimeAtPosition[0], vehicleReleaseVar));
 
         // release time of tests, need fix
         for (int p = 0; p < numSlots; p++) {
-            model.impose(new XgteqY(startTimeAtPosition[p], testReleaseAtPosition[p]));
+            IntVar tatStart = new IntVar(model, horizonStart, horizonEnd);
+            model.impose(new XplusYeqZ(startTimeAtPosition[p], prepDurAtPosition[p], tatStart));
+//            model.impose(new XgteqY(startTimeAtPosition[p], testReleaseAtPosition[p]));
+            model.impose(new XgteqY(tatStart, testReleaseAtPosition[p]));
         }
+
 
         // each test appear at once in the column
         IntStream.range(0, numTests).forEach(t->model.impose(new XlteqC(occurenceOfTest[t], 1)));
@@ -146,9 +153,9 @@ public class JacopPricer implements Pricer{
             }
         }
 
-        // start time between two positions, assume immediate start
+        // start time between two positions
         for (int p = 0; p < numSlots-1; p++) {
-            model.impose(new XplusYeqZ(startTimeAtPosition[p],
+            model.impose(new XplusYlteqZ(startTimeAtPosition[p],
                     durAtPosition[p],
                     startTimeAtPosition[p+1]));
         }
@@ -198,65 +205,138 @@ public class JacopPricer implements Pricer{
         }
         IntVar totalTardiness = new IntVar(model, 0, horizonEnd);
         model.impose(new SumInt(model, tardinessAtPosition, "==", totalTardiness));
+        // convert to float
+        FloatVar totalTardinessFloat = new FloatVar(model, 0, horizonEnd*numSlots);
+        model.impose(new XeqP(totalTardiness, totalTardinessFloat));
 
 //
         // vehicle contribution
-        IntVar vehicleContrib = new IntVar(model, Arrays.stream(vehicleDualArr).min().getAsInt(),
-                Arrays.stream(vehicleDualArr).max().getAsInt());
-        model.impose(new Element(selectVehicle, vehicleDualArr, vehicleContrib, -1));
+//        IntVar vehicleContrib = new IntVar(model, Arrays.stream(vehicleDualArr).min().getAsInt(),
+//                Arrays.stream(vehicleDualArr).max().getAsInt());
+//        model.impose(new Element(selectVehicle, vehicleDualArr, vehicleContrib, -1));
+        // convert to float
+        FloatVar vehicleContrib = new FloatVar(model, Arrays.stream(vehicleDualArr).min().getAsDouble(),
+                Arrays.stream(vehicleDualArr).max().getAsDouble());
+        model.impose(new ElementFloat(selectVehicle, vehicleDualArr, vehicleContrib, -1));
+
 //
         // test contribution
-        IntVar[] testContribAtPosition = new IntVar[numSlots];
+//        IntVar[] testContribAtPosition = new IntVar[numSlots];
+//        for (int p = 0; p < numSlots; p++) {
+//            testContribAtPosition[p] = new IntVar(model, Arrays.stream(testDualArr).min().getAsInt(),
+//                    Arrays.stream(testDualArr).max().getAsInt());
+//            model.impose(new Element(testAtPosition[p], testDualArr, testContribAtPosition[p], -1));
+//        }
+//        IntVar totalTestContrib = new IntVar(model, Arrays.stream(testDualArr).sum(), 0);
+//        model.impose(new SumInt(model, testContribAtPosition, "==", totalTestContrib));
+        FloatVar[] testContribAtPosition = new FloatVar[numSlots];
         for (int p = 0; p < numSlots; p++) {
-            testContribAtPosition[p] = new IntVar(model, Arrays.stream(testDualArr).min().getAsInt(),
-                    Arrays.stream(testDualArr).max().getAsInt());
-            model.impose(new Element(testAtPosition[p], testDualArr, testContribAtPosition[p], -1));
+            testContribAtPosition[p] = new FloatVar(model, Arrays.stream(testDualArr).min().getAsDouble(),
+                    Arrays.stream(testDualArr).max().getAsDouble());
+//            model.impose(new ElementFloat(testAtPosition[p], testDualArr, testContribAtPosition[p], -1));
         }
-        IntVar totalTestContrib = new IntVar(model, Arrays.stream(testDualArr).sum(), 0);
-        model.impose(new SumInt(model, testContribAtPosition, "==", totalTestContrib));
+        model.impose(new ElementFloat(testAtPosition[0], testDualArr, testContribAtPosition[0], -1));
+//        FloatVar totalTestContrib = new FloatVar(model, Arrays.stream(testDualArr).sum(), 0);
+//        double[] weights = new double[numSlots+1];
+//        Arrays.fill(weights,1.0);
+//        weights[weights.length-1] = -1.0;
+//        FloatVar[] vars = new FloatVar[numSlots+1];
+//        for (int p = 0; p < numSlots; p++) {
+//            vars[p] = testContribAtPosition[p];
+//        }
+//        vars[vars.length-1] = totalTestContrib;
+//        model.impose(new LinearFloat(model, vars, weights, "==", 0));
 
         // reduced cost = VEHICLE COST + total tardiness - test contribution - vehicle contribution
-        IntVar rc = new IntVar(model, -1000, 1000);
-        model.impose(new XplusYplusQeqZ(totalTardiness, vehicleContrib, totalTestContrib, rc));
-        model.impose(new XltC(rc, (int)-Global.VEHICLE_COST));
+//        IntVar rc = new IntVar(model, -1000, 1000);
+//        model.impose(new XplusYplusQeqZ(totalTardiness, vehicleContrib, totalTestContrib, rc));
+//        model.impose(new XltC(rc, (int)-Global.VEHICLE_COST));
+//        FloatVar rc = new FloatVar(model, -1000, 1000);
+//        model.impose(new LinearFloat(model, new FloatVar[]{totalTardinessFloat, totalTestContrib, vehicleContrib, rc},
+//                new double[]{1,1,1,-1}, "==", 0));
+//        model.impose(new PltC(rc, -Global.VEHICLE_COST));
 
+        // searching strategy
 
+        // float variable search
+        DepthFirstSearch<FloatVar> floatVarNailing = new DepthFirstSearch<>();
+        FloatVar[] floatVars = {totalTardinessFloat, vehicleContrib, testContribAtPosition[0],testContribAtPosition[1],testContribAtPosition[2],testContribAtPosition[3] }; //, totalTestContrib, rc};
+        SplitSelectFloat<FloatVar> floatVarSelectChoicePoint = new SplitSelectFloat<>(model, floatVars,
+                null);
+        floatVarNailing.setSelectChoicePoint(floatVarSelectChoicePoint);
+        floatVarNailing.getSolutionListener().recordSolutions(true);
+
+        // start time & aux variable search
         Search<IntVar> timeAssignment = new DepthFirstSearch<>();
-        IntVar[] timeVars = new IntVar[numSlots+1];
+        IntVar[] timeVars = new IntVar[1+numSlots*2];
         timeVars[0] = selectVehicle;
         for (int p = 0; p < numSlots; p++) {
             timeVars[1+p] = startTimeAtPosition[p];
+            timeVars[1+numSlots+p] = tardinessAtPosition[p];
         }
+
         SelectChoicePoint<IntVar> timeSearch = new InputOrderSelect<>(model, timeVars,
                 new IndomainMin<>()
                 );
+        timeAssignment.addChildSearch(floatVarNailing);
         timeAssignment.setSelectChoicePoint(timeSearch);
+        timeAssignment.getSolutionListener().recordSolutions(true);
 
+
+        // test assignment search
         Search<IntVar> testAssignment = new DepthFirstSearch<>();
         SelectChoicePoint<IntVar> testSearch = new InputOrderSelect<>(model, testAtPosition,
                 new IndomainMin<>());
         testAssignment.addChildSearch(timeAssignment);
+        testAssignment.getSolutionListener().recordSolutions(true);
+
+
+
         boolean result = testAssignment.labeling(model, testSearch);
+//        boolean result = floatVarNailing.labeling(model, floatVarSelectChoicePoint);
+
+        // parse the solution
+
+        List<Integer> seq = new ArrayList<>();
+        int vehicleReleaseSelect;
 
         if (result) {
-            for (int p = 0; p < numSlots; p++) {
-                System.out.println("testAtPosition = " + testAtPosition[p]);
-                System.out.println("startTimeAtPosition = " + startTimeAtPosition[p]);
-                System.out.println("tardinessAtPosition = " + tardinessAtPosition[p]);
-                System.out.println("durAtPosition = " + durAtPosition[p]);
-                System.out.println("deadlineAtPosition[p] = " + deadlineAtPosition[p]);
+            assert testAssignment.getSolution().length==numSlots;
+            for (int i = 0; i < testAssignment.getSolution().length; i++) {
+                Domain val = testAssignment.getSolution()[i];
+                assert val.singleton(); // nailed down the value
+                int testIdx = val.valueEnumeration().nextElement();
+                if (testIdx != numTests)
+                    seq.add(tidArr[testIdx]);
             }
-            System.out.println("rc = " + rc);
+
+            // vehicle selection
+            assert timeAssignment.getSolution().length>0;
+            Domain val = timeAssignment.getSolution()[0];
+            assert val.singleton();
+            int vehicleIdx = val.valueEnumeration().nextElement();
+
+            // reduced cost
+            val = timeAssignment.getSolution()[timeAssignment.getSolution().length-1];
+            assert val.singleton();
+            this.reducedCost = val.valueEnumeration().nextElement() + Global.VEHICLE_COST;
+
+            vehicleReleaseSelect = releaseArr[vehicleIdx];
+
+            // create the column
+            Column col = new Column(seq, vehicleReleaseSelect);
+            System.out.println("totalTardinessFloat = " + totalTardinessFloat);
+            System.out.println("col.getCost() = " + col.getCost());
+            System.out.println("totalTardiness = " + totalTardiness);
+            System.out.println("this.reducedCost = " + this.reducedCost);
+            System.out.println("EnumPricer.reducedCost(col, testDual, vehice) = " + EnumPricer.reducedCost(col, testDual, vehicleDual));
+            return col;
+        } else {
+            // infeasible
+            this.reducedCost = Double.MAX_VALUE;
+            return null;
         }
 
 
-
-
-
-
-
-
-
-        return model;
     }
 }

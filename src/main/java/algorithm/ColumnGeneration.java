@@ -1,6 +1,7 @@
 package algorithm;
 
 import algorithm.pricer.CPOPricer;
+import algorithm.pricer.EnumPricer;
 import algorithm.pricer.JacopPricer;
 import algorithm.pricer.Pricer;
 import data.DataInstance;
@@ -88,8 +89,8 @@ public class ColumnGeneration implements Algorithm{
 
             final int maxIter = 1000;
             int iterTimes = 0;
-            Pricer pricer = new JacopPricer();
-
+//            Pricer pricer = new JacopPricer();
+            Pricer pricer = new CPOPricer();
 //            Pricer pricer = new EnumPricer();
             while (iterTimes++ < maxIter) {
 
