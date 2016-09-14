@@ -1,9 +1,9 @@
 import algorithm.Algorithm;
 import algorithm.Column;
-import algorithm.ColumnGenerationFacility;
 import algorithm.ColumnGeneration;
 import data.DataInstance;
 import data.Reader;
+import facility.ColumnGenerationFacility;
 import org.junit.Test;
 
 import java.util.List;

@@ -1,5 +1,6 @@
-package algorithm;
+package facility;
 
+import algorithm.Column;
 import data.DataInstance;
 import data.TestRequest;
 

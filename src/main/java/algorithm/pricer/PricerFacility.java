@@ -1,6 +1,6 @@
 package algorithm.pricer;
 
-import algorithm.Column;
+import facility.ColumnWithTiming;
 
 import java.util.List;
 import java.util.Map;
@@ -10,8 +10,10 @@ import java.util.Map;
  * academic use only
  */
 public interface PricerFacility {
-    List<Column> price(Map<Integer, Double> testDual,
-                       Map<Integer, Double> vehicleDual,
-                       Map<Integer, Double> dayDual);
+    List<ColumnWithTiming> price(Map<Integer, Double> testDual,
+                                 Map<Integer, Double> vehicleDual,
+                                 Map<Integer, Double> dayDual);
+
+    double getReducedCost();
 
 }

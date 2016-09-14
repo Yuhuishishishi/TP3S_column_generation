@@ -1,13 +1,10 @@
 package algorithm;
 
 import algorithm.pricer.CPOPricer;
-import algorithm.pricer.EnumPricer;
-import algorithm.pricer.JacopPricer;
 import algorithm.pricer.Pricer;
 import data.DataInstance;
 import gurobi.*;
 import utils.Global;
-
 
 import java.util.*;
 import java.util.stream.Collectors;

@@ -1,12 +1,16 @@
-package algorithm;
+package facility;
 
-import algorithm.pricer.CPPricerFacility;
+import algorithm.Algorithm;
+import algorithm.Column;
+import algorithm.pricer.CPOPricerFacility;
 import algorithm.pricer.PricerFacility;
 import data.DataInstance;
 import gurobi.*;
 import utils.Global;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static algorithm.ColumnGeneration.enumInitCol;
@@ -29,6 +33,7 @@ public class ColumnGenerationFacility implements Algorithm {
         vehicleCapConstrs = new HashMap<>();
     }
 
+
     @Override
     public void solve() {
         // enumerate initial set of columns
@@ -39,7 +44,7 @@ public class ColumnGenerationFacility implements Algorithm {
                 .collect(Collectors.toList());
 
         try {
-            GRBEnv env = new GRBEnv("full enum with facility");
+            GRBEnv env = new GRBEnv();
             GRBModel model = buildModel(env, colList);
             // suppress the log
             model.getEnv().set(GRB.IntParam.OutputFlag, 0);
@@ -56,7 +61,7 @@ public class ColumnGenerationFacility implements Algorithm {
             final int maxIter = 1000;
             int iterTimes = 0;
 
-            PricerFacility pricer = new CPPricerFacility();
+            PricerFacility pricer = new CPOPricerFacility();
             while (iterTimes++ < maxIter) {
                 model.optimize();
 
@@ -77,9 +82,15 @@ public class ColumnGenerationFacility implements Algorithm {
                     dayDual.put(d, constr.get(GRB.DoubleAttr.Pi));
                 }
 
-                List<Column> candidates = pricer.price(testDual, vehicleDual, dayDual);
+                List<ColumnWithTiming> candidates = pricer.price(testDual, vehicleDual, dayDual);
+                System.out.printf("Master obj: %.3f, pricing obj: %.3f\n", model.get(GRB.DoubleAttr.ObjVal),
+                        pricer.getReducedCost());
                 if (candidates.size()==0)
                     break;
+                // add the column to master problem
+                for (ColumnWithTiming col : candidates)
+                    addOneCol(model, col, GRB.CONTINUOUS);
+                model.update();
             }
 
             // solve the integer version
@@ -148,19 +159,30 @@ public class ColumnGenerationFacility implements Algorithm {
         // add variables
 
         for (ColumnWithTiming col : colList) {
-            GRBColumn grbColumn = new GRBColumn();
-            GRBConstr vConstr = vehicleCapConstrs.get(col.getRelease());
-            grbColumn.addTerm(1, vConstr);
-
-            col.getSeq().forEach(tid -> grbColumn.addTerm(1, testCoverConstrs.get(tid)));
-            col.daysHasCrash().forEach(d -> grbColumn.addTerm(1, resourceCapConstrs.get(d)));
-            GRBVar v = model.addVar(0, 1, col.getCost() + Global.VEHICLE_COST,
-                    GRB.BINARY, grbColumn, "use col " + col.getSeq());
-            
-            varMap.put(col, v);
+            addOneCol(model, col, GRB.BINARY);
         }
 
         model.update();
         return model;
     }
+
+    private void addOneCol(GRBModel model, ColumnWithTiming col, char vtype) throws GRBException {
+        GRBColumn grbColumn = new GRBColumn();
+        GRBConstr vConstr = vehicleCapConstrs.get(col.getRelease());
+        grbColumn.addTerm(1, vConstr);
+
+        col.getSeq().forEach(tid -> grbColumn.addTerm(1, testCoverConstrs.get(tid)));
+        col.daysHasCrash().forEach(d -> grbColumn.addTerm(1, resourceCapConstrs.get(d)));
+        GRBVar v;
+        if (vtype == GRB.BINARY)
+            v = model.addVar(0, 1, col.getCost() + Global.VEHICLE_COST,
+                    GRB.BINARY, grbColumn, "use col " + col.getSeq());
+        else
+            v = model.addVar(0, GRB.INFINITY, col.getCost() + Global.VEHICLE_COST,
+                    GRB.CONTINUOUS, grbColumn, "use col " + col.getSeq());
+
+        varMap.put(col, v);
+    }
+
+
 }
