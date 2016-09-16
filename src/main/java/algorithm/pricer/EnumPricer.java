@@ -43,6 +43,11 @@ public class EnumPricer implements Pricer {
         return this.reducedCost;
     }
 
+    @Override
+    public void end() {
+
+    }
+
     public static double reducedCost(Column col, Map<Integer, Double> testDual,
                                Map<Integer, Double> vehicleDual) {
         return Global.VEHICLE_COST + col.getCost()

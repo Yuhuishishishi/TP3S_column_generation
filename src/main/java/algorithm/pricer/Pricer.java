@@ -13,4 +13,5 @@ public interface Pricer {
     List<Column> price(Map<Integer, Double> testDual,
                               Map<Integer, Double> vehicleDual);
     double getReducedCost();
+    void end();
 }
