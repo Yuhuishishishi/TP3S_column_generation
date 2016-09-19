@@ -105,7 +105,8 @@ public class ColumnGeneration implements Algorithm{
                 }
 
                 List<Column> candidates = pricer.price(testDual, vehicleDual);
-                System.out.printf("Master obj: %.3f, pricing obj: %.3f\n", model.get(GRB.DoubleAttr.ObjVal),
+                System.out.printf("Iteration: %d, Master obj: %.3f, pricing obj: %.3f\n", iterTimes,
+                        model.get(GRB.DoubleAttr.ObjVal),
                         pricer.getReducedCost());
                 if (candidates.size()==0)
                     break;
@@ -151,6 +152,8 @@ public class ColumnGeneration implements Algorithm{
         if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL) {
             List<Column> usedCols = parseSol(colList);
             double tardiness = model.get(GRB.DoubleAttr.ObjVal) - usedCols.size()*Global.VEHICLE_COST;
+            System.out.println("total tardiness: " + usedCols.stream().mapToDouble(Column::getCost).sum());
+
             System.out.println("Used vehicles: " + usedCols.size());
             System.out.println("Tardiness: " + tardiness);
             System.out.println("Obj val: " + model.get(GRB.DoubleAttr.ObjVal));

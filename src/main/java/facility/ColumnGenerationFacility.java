@@ -8,6 +8,7 @@ import data.DataInstance;
 import gurobi.*;
 import utils.Global;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,7 @@ import static algorithm.ColumnGeneration.enumInitCol;
  * Yuhui Shi - University of Michigan
  * academic use only
  */
+@SuppressWarnings("ALL")
 public class ColumnGenerationFacility implements Algorithm {
 
     private Map<ColumnWithTiming, GRBVar> varMap;
@@ -58,7 +60,7 @@ public class ColumnGenerationFacility implements Algorithm {
 
             // ================================= Column Generation Loop ================================================
 
-            final int maxIter = 1000;
+            final int maxIter = 10000;
             int iterTimes = 0;
 
             PricerFacility pricer = new CPOPricerFacility();
@@ -83,13 +85,16 @@ public class ColumnGenerationFacility implements Algorithm {
                 }
 
                 List<ColumnWithTiming> candidates = pricer.price(testDual, vehicleDual, dayDual);
-                System.out.printf("Master obj: %.3f, pricing obj: %.3f\n", model.get(GRB.DoubleAttr.ObjVal),
+                System.out.printf("Iteration: %d, Master obj: %.3f, pricing obj: %.3f\n", iterTimes,
+                        model.get(GRB.DoubleAttr.ObjVal),
                         pricer.getReducedCost());
                 if (candidates.size()==0)
                     break;
                 // add the column to master problem
-                for (ColumnWithTiming col : candidates)
+                for (ColumnWithTiming col : candidates) {
                     addOneCol(model, col, GRB.CONTINUOUS);
+                    colList.add(col);
+                }
                 model.update();
             }
 
@@ -102,6 +107,7 @@ public class ColumnGenerationFacility implements Algorithm {
 
             if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL) {
                 List<ColumnWithTiming> usedCols = parseSol(colList);
+                System.out.println("max tardiness: " + usedCols.stream().mapToDouble(ColumnWithTiming::getCost).sum());
                 double tardiness = model.get(GRB.DoubleAttr.ObjVal) - usedCols.size()*Global.VEHICLE_COST;
                 System.out.println("Used vehicles: " + usedCols.size());
                 System.out.println("Tardiness: " + tardiness);
@@ -113,15 +119,13 @@ public class ColumnGenerationFacility implements Algorithm {
 
     }
 
-    private List<ColumnWithTiming> parseSol(List<ColumnWithTiming> colList) {
-        return colList.parallelStream().filter(col -> {
-            try {
-                return varMap.get(col).get(GRB.DoubleAttr.X)>0.5;
-            } catch (GRBException e) {
-                e.printStackTrace();
-                return false;
-            }
-        }).collect(Collectors.toList());
+    private List<ColumnWithTiming> parseSol(List<ColumnWithTiming> colList) throws GRBException {
+        List<ColumnWithTiming> result = new ArrayList<>();
+        for (Map.Entry<ColumnWithTiming, GRBVar> entry : this.varMap.entrySet()) {
+            if (entry.getValue().get(GRB.DoubleAttr.X) > 0.5)
+                result.add(entry.getKey());
+        }
+        return result;
     }
 
     private GRBModel buildModel(GRBEnv env, List<ColumnWithTiming> colList) throws GRBException {

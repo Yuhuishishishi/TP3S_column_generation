@@ -15,7 +15,7 @@ import java.util.List;
  */
 public class FullEnumTest {
 
-    private String filepath = "./data/157 - orig.tp3s";
+    private String filepath = "./data/156 - orig.tp3s";
 
     @Test
     public void testGetTests() throws Exception {
@@ -42,7 +42,12 @@ public class FullEnumTest {
         DataInstance.init(jsonReader);
 
         Algorithm colgenSolver = new ColumnGeneration();
+
+        long time = System.nanoTime();
+
         colgenSolver.solve();
+
+        System.out.println("Time spent " + (System.nanoTime()-time)/1e6 + "ms");
     }
 
 
@@ -52,7 +57,11 @@ public class FullEnumTest {
         DataInstance.init(jsonReader);
 
         Algorithm fullEnumSolver = new ColumnGenerationFacility();
+        long time = System.nanoTime();
+
         fullEnumSolver.solve();
+        System.out.println("Time spent " + (System.nanoTime()-time)/1e6 + "ms");
+
         assert fullEnumSolver != null;
     }
 
