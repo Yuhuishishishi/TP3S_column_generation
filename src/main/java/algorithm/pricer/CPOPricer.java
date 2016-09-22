@@ -7,13 +7,14 @@ import ilog.concert.IloException;
 import ilog.concert.IloIntVar;
 import ilog.concert.IloNumExpr;
 import ilog.concert.IloRange;
-import ilog.cp.IloCP;
+import ilog.cp.*;
 import utils.Global;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 /**
  * Yuhui Shi - University of Michigan
@@ -146,6 +147,7 @@ public class CPOPricer implements Pricer {
             }
 
             negReducedConstContr = model.addLe(model.numExpr(), -0.001);
+
         } catch (IloException ex) {
             ex.printStackTrace();
         }
@@ -213,7 +215,45 @@ public class CPOPricer implements Pricer {
             // negative reduced cost constraints
             model.addLe(reducedCostExpr, -0.001);
 
-            model.setOut(null);
+//            model.setOut(null);
+
+
+            // ================================ searching strategy======================================================
+            IloSearchPhase[] searchPhases = new IloSearchPhase[3];
+
+            // first fix the assignment of vehicle
+            // variable selector = None. only one variable
+            // value selector = smallest dual contribution first, if tie, smaller release first
+            IloValueSelector[] vehicleValueSelector = new IloValueSelector[2];
+            final int numVehicles = DataInstance.getInstance().getVehicleReleaseList().size();
+            vehicleValueSelector[0] = model.selectSmallest(
+                    model.explicitValueEval(IntStream.range(0, numVehicles).toArray(),
+                            vehicleDualArr));  // smallest vehicle dual contribution first
+            vehicleValueSelector[1] = model.selectSmallest(model.value());
+            IloSearchPhase vehicleSearch = model.searchPhase(new IloIntVar[]{selectVehicle},
+                    model.intVarChooser(model.selectRandomVar()),
+                    model.intValueChooser(vehicleValueSelector));
+            searchPhases[0] = vehicleSearch;
+
+            // fix the test assignment
+            // select the test with the least dual contribution
+            IloValueSelector testValueSelector = model.selectSmallest(model.explicitValueEval(
+                    IntStream.range(0, numTests).toArray(),
+                    testDualArr));
+            // select the variable on smaller slots first
+            IloVarSelector testVarSelector = model.selectSmallest(model.varIndex(testAtPosition));
+            IloSearchPhase testSearch = model.searchPhase(testAtPosition,
+                    model.intVarChooser(testVarSelector),
+                    model.intValueChooser(testValueSelector));
+            searchPhases[1] = testSearch;
+
+            // fix the start time of tests
+
+            // fix all auxiliary variables
+
+
+
+
 
             // solve the problem
             if (model.solve()) {
