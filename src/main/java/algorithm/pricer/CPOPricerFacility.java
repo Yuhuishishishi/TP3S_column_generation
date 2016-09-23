@@ -10,6 +10,7 @@ import ilog.concert.IloIntVar;
 import ilog.concert.IloNumExpr;
 import ilog.concert.IloRange;
 import ilog.cp.IloCP;
+import ilog.cp.IloSearchPhase;
 import utils.Global;
 
 import java.util.*;
@@ -29,7 +30,6 @@ public class CPOPricerFacility implements PricerFacility {
     private IloIntVar[] startTimeAtPosition;
     private IloIntVar selectVehicle;
     private IloRange negReducedCostConstr;
-    private IloIntVar[] durAtPosition;
 
     public CPOPricerFacility() {
         this.reducedCost = Double.MAX_VALUE;
@@ -190,7 +190,8 @@ public class CPOPricerFacility implements PricerFacility {
         final int[] releaseArr = DataInstance.getInstance().getVehicleReleaseList().stream().mapToInt(Integer::intValue)
                 .toArray();
         final int[] tidArr = DataInstance.getInstance().getTidList().stream().mapToInt(Integer::intValue).toArray();
-
+        final int[] durArr = Arrays.copyOf(DataInstance.getInstance().getTestArr().stream()
+                .mapToInt(TestRequest::getDur).toArray(), numTests + 1); // dummy test
         final int[] deadlineArr = Arrays.copyOf(DataInstance.getInstance().getTestArr().stream()
                 .mapToInt(TestRequest::getDeadline).toArray(), numTests + 1);
         deadlineArr[deadlineArr.length - 1] = horizonEnd;
@@ -225,7 +226,7 @@ public class CPOPricerFacility implements PricerFacility {
                 IloIntVar tardiness = model.intVar(0, horizonEnd);
                 model.addEq(tardiness,
                         model.max(0,
-                                model.diff(model.sum(startTimeAtPosition[p], durAtPosition[p]),
+                                model.diff(model.sum(startTimeAtPosition[p], model.element(durArr, testAtPosition[p])),
                                         model.element(deadlineArr, testAtPosition[p]))));
                 reducedCostExpr = model.sum(reducedCostExpr, tardiness);
                 // test dual contribution
@@ -263,6 +264,17 @@ public class CPOPricerFacility implements PricerFacility {
             negReducedCostConstr = model.addLe(reducedCostExpr, -0.001);
 
             model.setOut(null);
+
+            // search strategy
+            // find test assignment first
+            IloSearchPhase vehicleSelect = model.searchPhase(new IloIntVar[]{selectVehicle});
+            IloSearchPhase testPhase = model.searchPhase(testAtPosition,
+                    model.intVarChooser(model.selectSmallest(model.varIndex(testAtPosition))),
+                    model.intValueChooser(model.selectRandomValue()));
+            IloSearchPhase timePhase = model.searchPhase(startTimeAtPosition,
+                    model.intVarChooser(model.selectSmallest(model.varIndex(startTimeAtPosition))),
+                    model.intValueChooser(model.selectSmallest(model.valueLocalImpact())));
+            model.setSearchPhases(new IloSearchPhase[]{testPhase, vehicleSelect, timePhase});
 
             // solve the problem
             if (model.solve()) {
@@ -333,12 +345,6 @@ public class CPOPricerFacility implements PricerFacility {
                 startTimeAtPosition[p] = model.intVar(horizonStart, horizonEnd, "starttime_at_position");
             }
 
-            // aux variables
-            durAtPosition = new IloIntVar[numSlots];
-            for (int p = 0; p < numSlots; p++) {
-                durAtPosition[p] = model.intVar(0, 1000, "dur_at_position");
-                model.addEq(durAtPosition[p], model.element(durArr, testAtPosition[p]));
-            }
 
             // constraints
             // start after the selected vehicle is released
@@ -368,14 +374,14 @@ public class CPOPricerFacility implements PricerFacility {
             // start time between two positions
             for (int p = 0; p < numSlots - 1; p++) {
                 model.addGe(startTimeAtPosition[p + 1],
-                        model.sum(startTimeAtPosition[p], durAtPosition[p]));
+                        model.sum(startTimeAtPosition[p], model.element(durArr, testAtPosition[p])));
             }
 
             // if a position is left blank, then the start time is == previous end time
             for (int p = 1; p < numSlots; p++) {
                 model.add(model.ifThen(model.eq(testAtPosition[p], numTests),
                         model.eq(startTimeAtPosition[p],
-                                model.sum(startTimeAtPosition[p - 1], durAtPosition[p - 1]))));
+                                model.sum(startTimeAtPosition[p - 1], model.element(durArr, testAtPosition[p-1])))));
             }
 
             // compatibility
