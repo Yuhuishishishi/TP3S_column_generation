@@ -16,9 +16,9 @@ import java.util.stream.Collectors;
 public class ColumnGeneration implements Algorithm{
 
 
-    private Map<Column, GRBVar> varMap;
-    private Map<Integer, GRBConstr> testCoverConstrs;
-    private Map<Integer, GRBConstr> vehicleCapConstrs;
+    private final Map<Column, GRBVar> varMap;
+    private final Map<Integer, GRBConstr> testCoverConstrs;
+    private final Map<Integer, GRBConstr> vehicleCapConstrs;
 
     public ColumnGeneration() {
         testCoverConstrs = new HashMap<>();
@@ -160,7 +160,7 @@ public class ColumnGeneration implements Algorithm{
         }
     }
 
-    public GRBModel buildModel(GRBEnv env, List<Column> colList) throws GRBException {
+    private GRBModel buildModel(GRBEnv env, List<Column> colList) throws GRBException {
         GRBModel model =    new GRBModel(env);
 
         // build constraints first

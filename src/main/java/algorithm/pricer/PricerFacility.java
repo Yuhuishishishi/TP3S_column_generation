@@ -13,7 +13,7 @@ public interface PricerFacility {
     List<ColumnWithTiming> price(Map<Integer, Double> testDual,
                                  Map<Integer, Double> vehicleDual,
                                  Map<Integer, Double> dayDual);
-
     double getReducedCost();
+    void end();
 
 }

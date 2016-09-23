@@ -98,6 +98,8 @@ public class ColumnGenerationFacility implements Algorithm {
                 model.update();
             }
 
+            pricer.end();
+
             // solve the integer version
             for (GRBVar var : varMap.values()) {
                 var.set(GRB.CharAttr.VType, GRB.BINARY);

@@ -215,7 +215,7 @@ public class CPOPricer implements Pricer {
             // negative reduced cost constraints
             model.addLe(reducedCostExpr, -0.001);
 
-//            model.setOut(null);
+            model.setOut(null);
 
 
             // ================================ searching strategy======================================================
@@ -238,7 +238,7 @@ public class CPOPricer implements Pricer {
             // fix the test assignment
             // select the test with the least dual contribution
             IloValueSelector testValueSelector = model.selectSmallest(model.explicitValueEval(
-                    IntStream.range(0, numTests).toArray(),
+                    IntStream.rangeClosed(0, numTests).toArray(),
                     testDualArr));
             // select the variable on smaller slots first
             IloVarSelector testVarSelector = model.selectSmallest(model.varIndex(testAtPosition));
@@ -248,12 +248,16 @@ public class CPOPricer implements Pricer {
             searchPhases[1] = testSearch;
 
             // fix the start time of tests
+            IloValueSelector startTimeValueSelector = model.selectSmallest(model.value()); // start as early as possible
+            // select the variables on smaller slots first
+            IloVarSelector startTimeVarSelector = model.selectSmallest(model.varIndex(startTimeAtPosition));
+            IloSearchPhase startTimeSearchPhase = model.searchPhase(startTimeAtPosition,
+                    model.intVarChooser(startTimeVarSelector),
+                    model.intValueChooser(startTimeValueSelector));
+            searchPhases[2] = startTimeSearchPhase;
 
             // fix all auxiliary variables
-
-
-
-
+//            model.setSearchPhases(searchPhases);
 
             // solve the problem
             if (model.solve()) {

@@ -12,8 +12,8 @@ import java.util.*;
  */
 public class ColumnWithTiming extends Column {
 
-    private Map<Integer, Integer> startTimeMap;
-    private Set<Integer> resourceSet;
+    private final Map<Integer, Integer> startTimeMap;
+    private final Set<Integer> resourceSet;
 
     public ColumnWithTiming(List<Integer> seq, int release) {
         super(seq, release);

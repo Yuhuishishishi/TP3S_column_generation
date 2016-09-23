@@ -2,18 +2,19 @@ package algorithm;
 
 import data.DataInstance;
 import data.TestRequest;
-import data.Vehicle;
 
 import java.util.List;
 
 /**
  * Created by yuhui on 8/24/2016.
+ * University of Michigan
+ * Academic use only
  */
 public class Column {
 
     protected double cost;
-    protected List<Integer> seq;
-    protected int release;
+    protected final List<Integer> seq;
+    protected final int release;
 
     public Column(List<Integer> seq, int release) {
         this.seq = seq;

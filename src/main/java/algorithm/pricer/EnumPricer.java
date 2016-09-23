@@ -15,7 +15,7 @@ import java.util.stream.IntStream;
  * academic use only
  */
 public class EnumPricer implements Pricer {
-    private List<Column> colList;
+    private final List<Column> colList;
     private double reducedCost;
 
     public EnumPricer() {
