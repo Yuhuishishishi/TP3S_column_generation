@@ -52,4 +52,34 @@ public class Column {
     public int getRelease() {
         return release;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Column column = (Column) o;
+
+        if (release != column.release) return false;
+        return seq != null ? sameSeq(seq, column.seq) : column.seq == null;
+
+    }
+
+    private boolean sameSeq(List<Integer> seq1, List<Integer> seq2) {
+        if (seq1.size() != seq2.size())
+            return false;
+
+        for (int i = 0; i < seq1.size(); i++) {
+            if (seq1.get(i).intValue()!=seq2.get(i).intValue())
+                return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = seq != null ? seq.hashCode() : 0;
+        result = 31 * result + release;
+        return result;
+    }
 }

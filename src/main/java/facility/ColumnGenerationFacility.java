@@ -8,10 +8,7 @@ import data.DataInstance;
 import gurobi.*;
 import utils.Global;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static algorithm.ColumnGeneration.enumInitCol;
@@ -44,6 +41,8 @@ public class ColumnGenerationFacility implements Algorithm {
         List<ColumnWithTiming> colList = normalColList.stream()
                 .map(col -> new ColumnWithTiming(col.getSeq(), col.getRelease()))
                 .collect(Collectors.toList());
+        Set<ColumnWithTiming> uniqColSet = new HashSet<>(colList);
+        assert colList.size()==uniqColSet.size();
 
         try {
             GRBEnv env = new GRBEnv();
@@ -85,16 +84,22 @@ public class ColumnGenerationFacility implements Algorithm {
                 }
 
                 List<ColumnWithTiming> candidates = pricer.price(testDual, vehicleDual, dayDual);
-                System.out.printf("Iteration: %d, Master obj: %.3f, pricing obj: %.3f\n", iterTimes,
+                System.out.printf("Iteration: %d, Master obj: %.3f, pricing obj: %.3f, # cols: %d, ", iterTimes,
                         model.get(GRB.DoubleAttr.ObjVal),
-                        pricer.getReducedCost());
+                        pricer.getReducedCost(),
+                        candidates.size());
                 if (candidates.size()==0)
                     break;
                 // add the column to master problem
+                int realColNum = 0;
                 for (ColumnWithTiming col : candidates) {
-                    addOneCol(model, col, GRB.CONTINUOUS);
-                    colList.add(col);
+                    if (uniqColSet.add(col)) {
+                        addOneCol(model, col, GRB.CONTINUOUS);
+                        colList.add(col);
+                        realColNum++;
+                    }
                 }
+                System.out.print("# col added: " + realColNum + "\n");
                 model.update();
             }
 
@@ -105,6 +110,8 @@ public class ColumnGenerationFacility implements Algorithm {
                 var.set(GRB.CharAttr.VType, GRB.BINARY);
             }
             model.update();
+            model.getEnv().set(GRB.IntParam.OutputFlag, 1);
+
             model.optimize();
 
             if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL) {
@@ -118,8 +125,9 @@ public class ColumnGenerationFacility implements Algorithm {
         } catch (GRBException e) {
             e.printStackTrace();
         }
-
     }
+
+
 
     private List<ColumnWithTiming> parseSol(List<ColumnWithTiming> colList) throws GRBException {
         List<ColumnWithTiming> result = new ArrayList<>();

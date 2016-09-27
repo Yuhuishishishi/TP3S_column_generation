@@ -14,6 +14,7 @@ import ilog.cp.IloSearchPhase;
 import utils.Global;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -42,130 +43,149 @@ public class CPOPricerFacility implements PricerFacility {
                                                    Map<Integer, Double> dayDual) {
         // 1st stage pricer
         List<Column> firstStageCandidates = this.firstStagePricer.price(testDual, vehicleDual);
-        if (firstStageCandidates.size() == 0)
+        if (firstStageCandidates.size() == 0) {
+            System.out.println("Pricing relaxation problem is infeasible.");
             return null; // no solution to the relaxation, terminate
+        }
+        else {
+            Column candidate = firstStageCandidates.get(0);
+            ColumnWithTiming candidateWithTiming = new ColumnWithTiming(candidate.getSeq(), candidate.getRelease());
+
+            List<ColumnWithTiming> otherVersions = createMultipleVersion(candidateWithTiming);
+            // check if any of them negative reduced cost
+            List<ColumnWithTiming> usefulCols = otherVersions.stream()
+                    .filter(c -> reducedCost(c, testDual, vehicleDual, dayDual) < -0.001)
+                    .collect(Collectors.toList());
+            if (usefulCols.size()>0) {
+                // update the reduced cost
+                this.reducedCost = usefulCols.stream().mapToDouble(c->EnumPricer.reducedCost(c,testDual,vehicleDual))
+                        .min().getAsDouble();
+                System.out.println("Pricing heuristic find " + usefulCols.size() + " cols");
+                return usefulCols;
+            }
+        }
         // build the timing decisions
-        Column candidate = firstStageCandidates.get(0);
-
-        int[] tidArr = candidate.getSeq().stream().mapToInt(Integer::intValue).toArray();
-        int[] prepArr = candidate.getSeq().stream()
-                .mapToInt(tid -> DataInstance.getInstance().getTestById(tid).getPrep())
-                .toArray();
-        int[] durArr = candidate.getSeq().stream()
-                .mapToInt(tid -> DataInstance.getInstance().getTestById(tid).getDur())
-                .toArray();
-        int[] deadlineArr = candidate.getSeq().stream()
-                .mapToInt(tid -> DataInstance.getInstance().getTestById(tid).getDeadline())
-                .toArray();
-        int[] testReleaseArr = candidate.getSeq().stream()
-                .mapToInt(tid -> DataInstance.getInstance().getTestById(tid).getRelease())
-                .toArray();
-        Map<Integer, Double> negDayDual = new HashMap<>();
-        dayDual.keySet().forEach(e -> negDayDual.put(e, -dayDual.get(e)));
-
-        final int numTests = candidate.getSeq().size();
-        final int horizonStart = DataInstance.getInstance().getHorizonStart();
-        final int horizonEnd = DataInstance.getInstance().getHorizonEnd();
-        final int numDays = horizonEnd - horizonStart + 1;
-        // precompute the day dual contribution matrix
-        double[] dayContrib = new double[numTests * numDays]; // dummy test
-        for (int t = 0; t < numTests; t++) {
-            int tid = tidArr[t];
-            TestRequest test = DataInstance.getInstance().getTestById(tid);
-            for (int d = 0; d < numDays; d++) {
-                int start = d + horizonStart;
-                int tatStart = start + test.getPrep();
-                int tatEnd = tatStart + test.getTat();
-                // add all duals from tatStart -> tatEnd
-                final double[] totalDual = {0};
-                IntStream.range(tatStart, tatEnd).forEach(e ->
-                        totalDual[0] += negDayDual.getOrDefault(e, 0.0)
-                );
-                dayContrib[t * numDays + d] = totalDual[0];
-            }
-        }
-
-
-        IloCP timeProb = new IloCP();
-
-        try {
-            IloIntVar[] startTimeAtPosition = timeProb.intVarArray(numTests,
-                    DataInstance.getInstance().getHorizonStart(),
-                    DataInstance.getInstance().getHorizonEnd());
-
-            // constraints
-            // start after the selected vehicle is released
-            timeProb.addGe(startTimeAtPosition[0], candidate.getRelease());
-
-            // release time of tests
-            for (int p = 0; p < numTests; p++) {
-                timeProb.addGe(timeProb.sum(startTimeAtPosition[p], prepArr[p]), testReleaseArr[p]);
-            }
-
-            // start time between two positions
-            for (int p = 0; p < numTests - 1; p++) {
-                timeProb.addGe(startTimeAtPosition[p + 1],
-                        timeProb.sum(startTimeAtPosition[p], durArr[p]));
-            }
-
-            // minimize reduced cost
-            IloNumExpr reducedCostExpr = timeProb.numExpr();
-            // constants
-            reducedCostExpr = timeProb.sum(Global.VEHICLE_COST
-                            - vehicleDual.get(candidate.getRelease())
-                            - candidate.getSeq().stream().mapToDouble(testDual::get).reduce((i, j) -> (i + j)).getAsDouble(),
-                    reducedCostExpr);
-            // tardiness
-            IloNumExpr totalTardiness = timeProb.numExpr();
-            IloNumExpr totalDayContrib = timeProb.numExpr();
-            for (int p = 0; p < numTests; p++) {
-                // tardiness
-                IloIntVar tardiness = timeProb.intVar(0, horizonEnd);
-                timeProb.addEq(tardiness,
-                        timeProb.max(0,
-                                timeProb.diff(timeProb.sum(startTimeAtPosition[p], durArr[p]),
-                                        deadlineArr[p])));
-//                reducedCostExpr = timeProb.sum(reducedCostExpr, tardiness);
-                totalTardiness = timeProb.sum(totalTardiness, tardiness);
-
-                // day contribution
-                totalDayContrib = timeProb.sum(totalDayContrib,
-                        timeProb.element(dayContrib, timeProb.sum(p * numDays,
-                                timeProb.diff(startTimeAtPosition[p], horizonStart))));
-            }
-            reducedCostExpr = timeProb.sum(reducedCostExpr, totalTardiness);
-            reducedCostExpr = timeProb.sum(reducedCostExpr, totalDayContrib);
-
-            timeProb.addMinimize(reducedCostExpr);
-            timeProb.setOut(null);
-
-            if (timeProb.solve()) {
-                // parse the solution
-                Map<Integer, Integer> startTimeMap = new HashMap<>();
-                for (int p = 0; p < numTests; p++) {
-                    int time = (int) Math.round(timeProb.getValue(startTimeAtPosition[p]));
-                    startTimeMap.put(
-                            candidate.getSeq().get(p),
-                            time
-                    );
-                }
-                ColumnWithTiming result = new ColumnWithTiming(candidate.getSeq(), candidate.getRelease(),
-                        startTimeMap);
-                System.out.println("1st stage reduced cost = " + reducedCost(result, testDual, vehicleDual, dayDual));
-
-                if (timeProb.getObjValue() < -0.001) {
-                    this.reducedCost = timeProb.getObjValue();
-                    return Collections.singletonList(result);
-                } else {
-                    this.reducedCost = Double.MAX_VALUE;
-                }
-            }
-
-        } catch (IloException e) {
-            e.printStackTrace();
-        } finally {
-            timeProb.end();
-        }
+//        Column candidate = firstStageCandidates.get(0);
+//
+//        int[] tidArr = candidate.getSeq().stream().mapToInt(Integer::intValue).toArray();
+//        int[] prepArr = candidate.getSeq().stream()
+//                .mapToInt(tid -> DataInstance.getInstance().getTestById(tid).getPrep())
+//                .toArray();
+//        int[] durArr = candidate.getSeq().stream()
+//                .mapToInt(tid -> DataInstance.getInstance().getTestById(tid).getDur())
+//                .toArray();
+//        int[] deadlineArr = candidate.getSeq().stream()
+//                .mapToInt(tid -> DataInstance.getInstance().getTestById(tid).getDeadline())
+//                .toArray();
+//        int[] testReleaseArr = candidate.getSeq().stream()
+//                .mapToInt(tid -> DataInstance.getInstance().getTestById(tid).getRelease())
+//                .toArray();
+//        Map<Integer, Double> negDayDual = new HashMap<>();
+//        dayDual.keySet().forEach(e -> negDayDual.put(e, -dayDual.get(e)));
+//
+//        final int numTests = candidate.getSeq().size();
+//        final int horizonStart = DataInstance.getInstance().getHorizonStart();
+//        final int horizonEnd = DataInstance.getInstance().getHorizonEnd();
+//        final int numDays = horizonEnd - horizonStart + 1;
+//        // precompute the day dual contribution matrix
+//        double[] dayContrib = new double[numTests * numDays]; // dummy test
+//        for (int t = 0; t < numTests; t++) {
+//            int tid = tidArr[t];
+//            TestRequest test = DataInstance.getInstance().getTestById(tid);
+//            for (int d = 0; d < numDays; d++) {
+//                int start = d + horizonStart;
+//                int tatStart = start + test.getPrep();
+//                int tatEnd = tatStart + test.getTat();
+//                // add all duals from tatStart -> tatEnd
+//                final double[] totalDual = {0};
+//                IntStream.range(tatStart, tatEnd).forEach(e ->
+//                        totalDual[0] += negDayDual.getOrDefault(e, 0.0)
+//                );
+//                dayContrib[t * numDays + d] = totalDual[0];
+//            }
+//        }
+//
+//
+//        IloCP timeProb = new IloCP();
+//
+//        try {
+//            IloIntVar[] startTimeAtPosition = timeProb.intVarArray(numTests,
+//                    DataInstance.getInstance().getHorizonStart(),
+//                    DataInstance.getInstance().getHorizonEnd());
+//
+//            // constraints
+//            // start after the selected vehicle is released
+//            timeProb.addGe(startTimeAtPosition[0], candidate.getRelease());
+//
+//            // release time of tests
+//            for (int p = 0; p < numTests; p++) {
+//                timeProb.addGe(timeProb.sum(startTimeAtPosition[p], prepArr[p]), testReleaseArr[p]);
+//            }
+//
+//            // start time between two positions
+//            for (int p = 0; p < numTests - 1; p++) {
+//                timeProb.addGe(startTimeAtPosition[p + 1],
+//                        timeProb.sum(startTimeAtPosition[p], durArr[p]));
+//            }
+//
+//            // minimize reduced cost
+//            IloNumExpr reducedCostExpr = timeProb.numExpr();
+//            // constants
+//            reducedCostExpr = timeProb.sum(Global.VEHICLE_COST
+//                            - vehicleDual.get(candidate.getRelease())
+//                            - candidate.getSeq().stream().mapToDouble(testDual::get).reduce((i, j) -> (i + j)).getAsDouble(),
+//                    reducedCostExpr);
+//            // tardiness
+//            IloNumExpr totalTardiness = timeProb.numExpr();
+//            IloNumExpr totalDayContrib = timeProb.numExpr();
+//            for (int p = 0; p < numTests; p++) {
+//                // tardiness
+//                IloIntVar tardiness = timeProb.intVar(0, horizonEnd);
+//                timeProb.addEq(tardiness,
+//                        timeProb.max(0,
+//                                timeProb.diff(timeProb.sum(startTimeAtPosition[p], durArr[p]),
+//                                        deadlineArr[p])));
+////                reducedCostExpr = timeProb.sum(reducedCostExpr, tardiness);
+//                totalTardiness = timeProb.sum(totalTardiness, tardiness);
+//
+//                // day contribution
+//                totalDayContrib = timeProb.sum(totalDayContrib,
+//                        timeProb.element(dayContrib, timeProb.sum(p * numDays,
+//                                timeProb.diff(startTimeAtPosition[p], horizonStart))));
+//            }
+//            reducedCostExpr = timeProb.sum(reducedCostExpr, totalTardiness);
+//            reducedCostExpr = timeProb.sum(reducedCostExpr, totalDayContrib);
+//
+//            timeProb.addMinimize(reducedCostExpr);
+//            timeProb.setOut(null);
+//
+//            if (timeProb.solve()) {
+//                // parse the solution
+//                Map<Integer, Integer> startTimeMap = new HashMap<>();
+//                for (int p = 0; p < numTests; p++) {
+//                    int time = (int) Math.round(timeProb.getValue(startTimeAtPosition[p]));
+//                    startTimeMap.put(
+//                            candidate.getSeq().get(p),
+//                            time
+//                    );
+//                }
+//                ColumnWithTiming result = new ColumnWithTiming(candidate.getSeq(), candidate.getRelease(),
+//                        startTimeMap);
+//                System.out.println("1st stage reduced cost = " + reducedCost(result, testDual, vehicleDual, dayDual));
+//
+//                if (timeProb.getObjValue() < -0.001) {
+//                    this.reducedCost = timeProb.getObjValue();
+//                    return Collections.singletonList(result);
+//                } else {
+//                    this.reducedCost = Double.MAX_VALUE;
+//                }
+//            }
+//
+//        } catch (IloException e) {
+//            e.printStackTrace();
+//        } finally {
+//            timeProb.end();
+//        }
 
         return new ArrayList<>();
     }
@@ -173,11 +193,17 @@ public class CPOPricerFacility implements PricerFacility {
     @Override
     public List<ColumnWithTiming> price(Map<Integer, Double> testDual, Map<Integer, Double> vehicleDual, Map<Integer, Double> dayDual) {
 
-//        List<ColumnWithTiming> firstStageCandidate = firstStagePrice(testDual, vehicleDual, dayDual);
+        List<ColumnWithTiming> firstStageCandidate = firstStagePrice(testDual, vehicleDual, dayDual);
         List<ColumnWithTiming> candidates = new ArrayList<>();
 
-//        if (null == firstStageCandidate)
-//            return candidates; // no solution to the relaxation
+        if (null == firstStageCandidate)
+            return candidates;
+        else {
+            if (firstStageCandidate.size()>0)
+                return firstStageCandidate;
+
+
+        }
 //        else if (firstStageCandidate.size()>0)
 //            return firstStageCandidate;
 
@@ -294,8 +320,9 @@ public class CPOPricerFacility implements PricerFacility {
                 }
                 ColumnWithTiming newCol = new ColumnWithTiming(seq, colRelease,
                         startTimeMap);
-                candidates.add(newCol);
-
+                List<ColumnWithTiming> newColOtherVersions = createMultipleVersion(newCol);
+//                candidates.add(newCol);
+                candidates.addAll(newColOtherVersions);
             } else {
                 this.reducedCost = Double.MAX_VALUE;
             }
@@ -305,6 +332,69 @@ public class CPOPricerFacility implements PricerFacility {
         }
 
         return candidates;
+    }
+
+    private List<ColumnWithTiming> createMultipleVersion(ColumnWithTiming rawCol) {
+        List<ColumnWithTiming> result = new ArrayList<>();
+        final int seqLength = rawCol.getSeq().size();
+        int[] possibleStartUB = new int[seqLength];
+        int[] possibleStartLB = new int[seqLength];
+        int[] durArr = rawCol.getSeq().stream()
+                .mapToInt(tid->DataInstance.getInstance().getTestById(tid).getDur()).toArray();
+
+        for (int i = 0; i < seqLength; i++) {
+            TestRequest test = DataInstance.getInstance().getTestById(rawCol.getSeq().get(i));
+            possibleStartLB[i] = rawCol.getStartTimeByTid(rawCol.getSeq().get(i));
+            int ub = Math.max(test.getDeadline() - test.getDur(),
+                    possibleStartLB[i]);
+            possibleStartUB[i] = ub;
+        }
+
+        List<List<Integer>> startTimeComb = new ArrayList<>();
+        List<List<Integer>> prev, current;
+        prev = new ArrayList<>();
+        current = new ArrayList<>();
+        for (int i = 0; i < seqLength; i++) {
+            current.clear();
+            for (int e = possibleStartLB[i]; e <= possibleStartUB[i]; e++) {
+                if (i==0)
+                    current.add(Collections.singletonList(e));
+                else {
+                    for (List<Integer> time : prev) {
+                        List<Integer> newTime = new ArrayList<>(time);
+                        newTime.add(e);
+                        current.add(newTime);
+                    }
+                }
+
+            }
+            prev.clear();
+            prev.addAll(current);
+        }
+        startTimeComb.addAll(current);
+
+        List<List<Integer>> validTimeComb = startTimeComb.stream()
+                .filter(l -> isValidTime(l, durArr)).collect(Collectors.toList());
+
+        for (List<Integer> s : validTimeComb) {
+            Map<Integer,Integer> startTimeMap = new HashMap<>();
+            for (int i = 0; i < seqLength; i++) {
+                startTimeMap.put(rawCol.getSeq().get(i),
+                        s.get(i));
+            }
+            result.add(new ColumnWithTiming(rawCol.getSeq(), rawCol.getRelease(),
+                    startTimeMap));
+        }
+
+        return result;
+    }
+
+    private boolean isValidTime(List<Integer> startTime, int[] dur) {
+        for (int i = 0; i < startTime.size()-1; i++) {
+            if (startTime.get(i) + dur[i] > startTime.get(i+1))
+                return false;
+        }
+        return true;
     }
 
     private IloCP buildCPmodel() {

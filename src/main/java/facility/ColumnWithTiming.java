@@ -74,4 +74,27 @@ public class ColumnWithTiming extends Column {
                 .sum();
 
     }
+
+    public int getStartTimeByTid(int tid) {
+        return startTimeMap.get(tid);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        ColumnWithTiming that = (ColumnWithTiming) o;
+
+        return startTimeMap.equals(that.startTimeMap);
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + startTimeMap.hashCode();
+        return result;
+    }
 }
