@@ -3,6 +3,7 @@ package algorithm;
 import algorithm.pricer.CPOPricer;
 import algorithm.pricer.Pricer;
 import data.DataInstance;
+import facility.ColumnWithTiming;
 import gurobi.*;
 import utils.Global;
 
@@ -157,6 +158,29 @@ public class ColumnGeneration implements Algorithm{
             System.out.println("Used vehicles: " + usedCols.size());
             System.out.println("Tardiness: " + tardiness);
             System.out.println("Obj val: " + model.get(GRB.DoubleAttr.ObjVal));
+
+            // count the max activities on day
+            List<ColumnWithTiming> usedColTimed = usedCols.stream().map(c->new ColumnWithTiming(c.getSeq(), c.getRelease()))
+                    .collect(Collectors.toList());
+            Map<Integer, Integer> activitiesOnDays = new HashMap<>();
+            usedColTimed.forEach(c-> {
+                List<Integer> daysWithActivties = c.daysHasCrash();
+                for (int d : daysWithActivties) {
+                    if (activitiesOnDays.containsKey(d))
+                        activitiesOnDays.put(
+                                d,
+                                activitiesOnDays.get(d)+1
+                        );
+                    else
+                        activitiesOnDays.put(d,1);
+                }
+            });
+            // find the max
+            Integer maxDay = activitiesOnDays.keySet().stream()
+                    .reduce((i, j) -> activitiesOnDays.get(i) > activitiesOnDays.get(j) ? i : j).orElse(-1);
+            System.out.println("max activities on day " + maxDay + ": " + activitiesOnDays.get(maxDay));
+
+
         }
     }
 

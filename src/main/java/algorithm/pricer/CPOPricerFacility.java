@@ -43,6 +43,7 @@ public class CPOPricerFacility implements PricerFacility {
                                                    Map<Integer, Double> dayDual) {
         // 1st stage pricer
         List<Column> firstStageCandidates = this.firstStagePricer.price(testDual, vehicleDual);
+        System.out.println("Pricing lb: " + this.firstStagePricer.getReducedCost());
         if (firstStageCandidates.size() == 0) {
             System.out.println("Pricing relaxation problem is infeasible.");
             return null; // no solution to the relaxation, terminate
@@ -193,17 +194,17 @@ public class CPOPricerFacility implements PricerFacility {
     @Override
     public List<ColumnWithTiming> price(Map<Integer, Double> testDual, Map<Integer, Double> vehicleDual, Map<Integer, Double> dayDual) {
 
-        List<ColumnWithTiming> firstStageCandidate = firstStagePrice(testDual, vehicleDual, dayDual);
+//        List<ColumnWithTiming> firstStageCandidate = firstStagePrice(testDual, vehicleDual, dayDual);
         List<ColumnWithTiming> candidates = new ArrayList<>();
 
-        if (null == firstStageCandidate)
-            return candidates;
-        else {
-            if (firstStageCandidate.size()>0)
-                return firstStageCandidate;
-
-
-        }
+//        if (null == firstStageCandidate)
+//            return candidates;
+//        else {
+//            if (firstStageCandidate.size()>0)
+//                return firstStageCandidate;
+//
+//
+//        }
 //        else if (firstStageCandidate.size()>0)
 //            return firstStageCandidate;
 
