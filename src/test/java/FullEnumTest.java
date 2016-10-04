@@ -1,6 +1,7 @@
 import algorithm.Algorithm;
 import algorithm.Column;
 import algorithm.ColumnGeneration;
+import algorithm.ColumnGenerationCplex;
 import data.DataInstance;
 import data.Reader;
 import facility.ColumnGenerationFacility;
@@ -15,7 +16,7 @@ import java.util.List;
  */
 public class FullEnumTest {
 
-    private final String filepath = "./data/156 - orig.tp3s";
+    private final String filepath = "./data/157 - orig.tp3s";
 
     @Test
     public void testGetTests() throws Exception {
@@ -33,6 +34,26 @@ public class FullEnumTest {
 
         Algorithm fullEnumSolver = new ColumnGeneration();
         ((ColumnGeneration) fullEnumSolver).solveFull();
+        assert fullEnumSolver != null;
+    }
+
+    @Test
+    public void testFullEnumAlgoCPLEX() {
+        Reader jsonReader = new Reader(filepath);
+        DataInstance.init(jsonReader);
+
+        Algorithm fullEnumSolver = new ColumnGenerationCplex();
+        ((ColumnGenerationCplex) fullEnumSolver).solveFull();
+        assert fullEnumSolver != null;
+    }
+
+    @Test
+    public void testColGenAlgoCPLEX() {
+        Reader jsonReader = new Reader(filepath);
+        DataInstance.init(jsonReader);
+
+        Algorithm fullEnumSolver = new ColumnGenerationCplex();
+        fullEnumSolver.solve();
         assert fullEnumSolver != null;
     }
 
