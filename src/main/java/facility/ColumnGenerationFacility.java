@@ -41,8 +41,21 @@ public class ColumnGenerationFacility implements Algorithm {
         List<ColumnWithTiming> colList = normalColList.stream()
                 .map(col -> new ColumnWithTiming(col.getSeq(), col.getRelease()))
                 .collect(Collectors.toList());
+
+        // create multiple versions of columns
+//        List<ColumnWithTiming> additonalColumns = new ArrayList<>();
+//        colList.forEach(c->{
+//            List<ColumnWithTiming> moreCols = CPOPricerFacility.createMultipleVersion(c);
+//            additonalColumns.addAll(moreCols);
+//        });
+//        colList.addAll(additonalColumns);
+//        System.out.println(additonalColumns.size() + " additional cols generated.");
+
         Set<ColumnWithTiming> uniqColSet = new HashSet<>(colList);
+//        colList.clear();
+//        colList.addAll(uniqColSet);
         assert colList.size()==uniqColSet.size();
+        System.out.println("unique col size: " + uniqColSet.size());
 
         try {
             GRBEnv env = new GRBEnv();

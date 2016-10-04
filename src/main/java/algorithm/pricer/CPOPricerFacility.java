@@ -390,7 +390,7 @@ public class CPOPricerFacility implements PricerFacility {
         return result;
     }
 
-    private boolean isValidTime(List<Integer> startTime, int[] dur) {
+    private static boolean isValidTime(List<Integer> startTime, int[] dur) {
         for (int i = 0; i < startTime.size()-1; i++) {
             if (startTime.get(i) + dur[i] > startTime.get(i+1))
                 return false;
