@@ -5,6 +5,7 @@ import algorithm.ColumnGenerationCplex;
 import data.DataInstance;
 import data.Reader;
 import facility.ColumnGenerationFacility;
+import facility.ColumnGenerationFacilityCPLEX;
 import org.junit.Test;
 
 import java.util.List;
@@ -78,6 +79,20 @@ public class FullEnumTest {
         DataInstance.init(jsonReader);
 
         Algorithm fullEnumSolver = new ColumnGenerationFacility();
+        long time = System.nanoTime();
+
+        fullEnumSolver.solve();
+        System.out.println("Time spent " + (System.nanoTime()-time)/1e6 + "ms");
+
+        assert fullEnumSolver != null;
+    }
+
+    @Test
+    public void testColGenWithFacilityCPLEX() {
+        Reader jsonReader = new Reader(filepath);
+        DataInstance.init(jsonReader);
+
+        Algorithm fullEnumSolver = new ColumnGenerationFacilityCPLEX();
         long time = System.nanoTime();
 
         fullEnumSolver.solve();
