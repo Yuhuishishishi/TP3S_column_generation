@@ -57,6 +57,15 @@ public class ColumnGenerationFacility implements Algorithm {
         assert colList.size()==uniqColSet.size();
         System.out.println("unique col size: " + uniqColSet.size());
 
+        // get the intial solutions
+        InitColDetector detector = new InitColDetector(normalColList);
+        List<ColumnWithTiming> additionalCols = detector.getInitSol();
+        System.out.println("additonal col size: " + additionalCols.size());
+        additionalCols.forEach(columnWithTiming -> {
+            if (uniqColSet.add(columnWithTiming))
+                colList.add(columnWithTiming);
+        });
+
         try {
             GRBEnv env = new GRBEnv();
             GRBModel model = buildModel(env, colList);
