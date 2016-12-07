@@ -1,13 +1,13 @@
 import algorithm.Column;
+import algorithm.CompatibilityMatrixDecomposition;
 import data.DataInstance;
 import data.Reader;
 import facility.ColumnWithTiming;
+import org.junit.Before;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Created by yuhuishi on 9/27/2016.
@@ -18,6 +18,11 @@ public class ColumnEqualTest {
 
     private final String filepath = "./data/157 - orig.tp3s";
 
+    @Before
+    public void init() {
+        Reader jsonReader = new Reader(filepath);
+        DataInstance.init(jsonReader);
+    }
 
     @Test
     public void columnEqTest() {
@@ -71,6 +76,34 @@ public class ColumnEqualTest {
 
         assert col1.equals(col2);
         assert col1.hashCode()==col2.hashCode();
+    }
+
+    @Test
+    public void compMatrixDecompositionTest() {
+
+        List<List<Integer>> result = CompatibilityMatrixDecomposition.compDecompose();
+        long totalTest = result.stream().flatMap(Collection::stream).count();
+        assert totalTest == DataInstance.getInstance().getTidList().size();
+        System.out.println(result);
+    }
+
+    @Test
+    public void danglingTestTest() {
+        int[] dangling = {1863, 1866, 1868, 1886, 1895, 1896, 1905, 1908, 1909};
+        List<Integer> tidList = DataInstance.getInstance().getTidList();
+        for (int checkTid : dangling) {
+            // check no tests can follow them
+            List<Integer> compTestsAfter =
+                    tidList.stream().filter(tid -> DataInstance.getInstance().getRelation(checkTid, tid))
+                            .collect(Collectors.toList());
+            assert compTestsAfter.size() == 0;
+            // check no tests can before them
+            List<Integer> compTestsBefore =
+                    tidList.stream().filter(tid -> DataInstance.getInstance().getRelation(tid, checkTid))
+                            .collect(Collectors.toList());
+            assert compTestsBefore.size() == 0;
+        }
+
     }
 
 }
