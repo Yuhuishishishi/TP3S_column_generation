@@ -89,6 +89,7 @@ public class ColumnEqualTest {
 
     @Test
     public void danglingTestTest() {
+        // for 157 only
         int[] dangling = {1863, 1866, 1868, 1886, 1895, 1896, 1905, 1908, 1909};
         List<Integer> tidList = DataInstance.getInstance().getTidList();
         for (int checkTid : dangling) {
