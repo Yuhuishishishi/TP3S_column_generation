@@ -511,7 +511,7 @@ public class CPOPricerFacility implements PricerFacility {
 
     }
 
-    private static double reducedCost(ColumnWithTiming col, Map<Integer, Double> testDual,
+    public static double reducedCost(ColumnWithTiming col, Map<Integer, Double> testDual,
                                       Map<Integer, Double> vehicleDual,
                                       Map<Integer, Double> dayDual) {
         double reducedCostWithoutDayDual =

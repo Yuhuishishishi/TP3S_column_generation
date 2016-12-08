@@ -4,6 +4,7 @@ import algorithm.Algorithm;
 import algorithm.Column;
 import algorithm.pricer.CPOPricerFacility;
 import algorithm.pricer.PricerFacility;
+import algorithm.pricer.SequenceThenTimePricerFacility;
 import data.DataInstance;
 import gurobi.*;
 import utils.Global;
@@ -84,7 +85,8 @@ public class ColumnGenerationFacility implements Algorithm {
             final int maxIter = 10000;
             int iterTimes = 0;
 
-            PricerFacility pricer = new CPOPricerFacility();
+//            PricerFacility pricer = new CPOPricerFacility();
+            PricerFacility pricer = new SequenceThenTimePricerFacility();
             while (iterTimes++ < maxIter) {
                 model.optimize();
 
@@ -133,6 +135,7 @@ public class ColumnGenerationFacility implements Algorithm {
             }
             model.update();
             model.getEnv().set(GRB.IntParam.OutputFlag, 1);
+            model.getEnv().set(GRB.DoubleParam.MIPGap, 0.01); // optimality termination gap
 
             model.optimize();
 
