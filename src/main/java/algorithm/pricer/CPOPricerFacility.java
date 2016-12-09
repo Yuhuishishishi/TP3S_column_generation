@@ -335,7 +335,7 @@ public class CPOPricerFacility implements PricerFacility {
         return candidates;
     }
 
-    private List<ColumnWithTiming> createMultipleVersion(ColumnWithTiming rawCol) {
+    public static List<ColumnWithTiming> createMultipleVersion(ColumnWithTiming rawCol) {
         List<ColumnWithTiming> result = new ArrayList<>();
         final int seqLength = rawCol.getSeq().size();
         int[] possibleStartUB = new int[seqLength];

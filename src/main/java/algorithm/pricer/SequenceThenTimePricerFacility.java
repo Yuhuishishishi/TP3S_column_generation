@@ -27,33 +27,110 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         if (null == seqPool)
             initSeqPool();
 
-        // find the minimum one
-        Optional<List<Integer>> minSeq = this.seqPool.parallelStream()
-                .reduce((s1, s2) -> colReducedCost(s1, testDual, vehicleDual, dayDual) < colReducedCost(s2, testDual, vehicleDual, dayDual) ?
-                        s1 : s2);
-        assert minSeq.isPresent();
-        this.lastReducedCost = colReducedCost(minSeq.get(), testDual, vehicleDual, dayDual);
+//        // find the minimum one
+//        Optional<List<Integer>> minSeq = this.seqPool.parallelStream()
+//                .reduce((s1, s2) -> colReducedCost(s1, testDual, vehicleDual, dayDual) < colReducedCost(s2, testDual, vehicleDual, dayDual) ?
+//                        s1 : s2);
+//        assert minSeq.isPresent();
+//        this.lastReducedCost = colReducedCost(minSeq.get(), testDual, vehicleDual, dayDual);
+//
+//        // negative
+//        if (lastReducedCost < -0.001) {
+//            // backtrack to figure out the timing
+//            double[][] valueFunction = optimalTimeFinding(minSeq.get(), dayDual);
+//            int[] result = backTractStartTime(minSeq.get(), vehicleDual, dayDual, valueFunction);
+//            int vehicleRelease = result[0];
+//
+//            Map<Integer, Integer> startTime = new HashMap<>();
+//            for (int i = 1; i < result.length; i++) {
+//                startTime.put(minSeq.get().get(i-1), result[i]);
+//            }
+//
+//            ColumnWithTiming col = new ColumnWithTiming(minSeq.get(), vehicleRelease, startTime);
+//
+//            return new ArrayList<>(Collections.singletonList(col));
+//        }
+//
+//
+//        return new ArrayList<>();
 
-        // negative
-        if (lastReducedCost < -0.001) {
-            // backtrack to figure out the timing
-            double[][] valueFunction = optimalTimeFinding(minSeq.get(), dayDual);
-            int[] result = backTractStartTime(minSeq.get(), vehicleDual, dayDual, valueFunction);
-            int vehicleRelease = result[0];
+        return genFullSchedule(testDual, vehicleDual, dayDual);
+//            return genAllNeg(testDual, vehicleDual, dayDual);
 
-            Map<Integer, Integer> startTime = new HashMap<>();
-            for (int i = 1; i < result.length; i++) {
-                startTime.put(minSeq.get().get(i-1), result[i]);
-            }
+    }
 
-            ColumnWithTiming col = new ColumnWithTiming(minSeq.get(), vehicleRelease, startTime);
 
-            return new ArrayList<>(Collections.singletonList(col));
+    // generate all negative columns
+    private List<ColumnWithTiming> genAllNeg(Map<Integer, Double> testDual,
+                                             Map<Integer, Double> vehicleDual,
+                                             Map<Integer, Double> dayDual) {
+        return seqPool.parallelStream()
+                .filter(seq->colReducedCost(seq, testDual, vehicleDual, dayDual) < -0.001)
+                .map(seq -> {
+                    double[][] valueFunction = optimalTimeFinding(seq, dayDual);
+                    int[] result = backTractStartTime(seq, vehicleDual, dayDual, valueFunction);
+                    int vehicleRelease = result[0];
+
+                    Map<Integer, Integer> startTime = new HashMap<>();
+                    for (int i = 1; i < result.length; i++) {
+                        startTime.put(seq.get(i-1), result[i]);
+                    }
+
+                    ColumnWithTiming col = new ColumnWithTiming(seq, vehicleRelease, startTime);
+                    return col;
+                }).collect(Collectors.toList());
+
+    }
+
+    // heuristic to generate a full schedule to cover all tests
+    private List<ColumnWithTiming> genFullSchedule(Map<Integer, Double> testDual,
+                                                   Map<Integer, Double> vehicleDual,
+                                                   Map<Integer, Double> dayDual) {
+        List<ColumnWithTiming> colList = new ArrayList<>();
+
+        Map<Integer, Boolean> testCovered = new HashMap<>();
+        DataInstance.getInstance().getTidList()
+                .forEach(tid->testCovered.put(tid, false));
+
+        // sort the seq pool
+        List<ColumnWithTiming> sortedCol = seqPool.stream().parallel()
+                .map(seq -> bestTimedColGivenSeq(seq, vehicleDual, dayDual)).sequential()
+                .sorted((c1, c2) -> {
+                    if (CPOPricerFacility.reducedCost(c1, testDual, vehicleDual, dayDual) <
+                            CPOPricerFacility.reducedCost(c2, testDual, vehicleDual, dayDual))
+                        return -1;
+                    else if (CPOPricerFacility.reducedCost(c1, testDual, vehicleDual, dayDual) >
+                            CPOPricerFacility.reducedCost(c2, testDual, vehicleDual, dayDual))
+                        return 1;
+                    else
+                        return 0;
+                }).collect(Collectors.toList());
+
+        for (ColumnWithTiming mostNeg : sortedCol) {
+            // pick the most negative one
+
+            if (CPOPricerFacility.reducedCost(mostNeg, testDual, vehicleDual, dayDual) > -0.001)
+                break;
+
+            // if tests covered
+            if (mostNeg.getSeq().stream().anyMatch(testCovered::get))
+                continue;
+
+            // create column with timing
+            colList.add(mostNeg);
+
+            // mark tests as covered
+            mostNeg.getSeq().forEach(tid-> testCovered.put(tid, true));
+
+            if (!testCovered.values().contains(false))
+                break;
         }
 
+        return colList;
 
-        return new ArrayList<>();
     }
+
+
 
     @Override
     public double getReducedCost() {
@@ -78,19 +155,37 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         // calculate the best reduced cost
         // decision - vehicle release day selection
         //          - time for different tests
-        double reducedCost = Global.VEHICLE_COST;
+//        double reducedCost = Global.VEHICLE_COST;
+//        double[][] valueFunction = optimalTimeFinding(seq, dayDual);
+//        // test composition
+//        for (Integer aSeq : seq) {
+//            reducedCost -= testDual.get(aSeq);
+//        }
+//        // find the smallest vehicle
+//        OptionalDouble minVehicleResourceCost = vehicleDual.keySet().stream()
+//                .mapToDouble(release -> -vehicleDual.get(release) + valueFunction[0][release])
+//                .min();
+//        assert minVehicleResourceCost.isPresent();
+//        reducedCost += minVehicleResourceCost.getAsDouble();
+//        return reducedCost;
+        return CPOPricerFacility.reducedCost(bestTimedColGivenSeq(seq, vehicleDual, dayDual),
+                testDual, vehicleDual, dayDual);
+
+    }
+
+    private ColumnWithTiming bestTimedColGivenSeq(List<Integer> seq,
+                                                  Map<Integer, Double> vehicleDual,
+                                                  Map<Integer, Double> dayDual) {
         double[][] valueFunction = optimalTimeFinding(seq, dayDual);
-        // test composition
-        for (Integer aSeq : seq) {
-            reducedCost -= testDual.get(aSeq);
+        int[] result = backTractStartTime(seq, vehicleDual, dayDual, valueFunction);
+        int vehicleRelease = result[0];
+
+        Map<Integer, Integer> startTime = new HashMap<>();
+        for (int i = 1; i < result.length; i++) {
+            startTime.put(seq.get(i-1), result[i]);
         }
-        // find the smallest vehicle
-        OptionalDouble minVehicleResourceCost = vehicleDual.keySet().stream()
-                .mapToDouble(release -> -vehicleDual.get(release) + valueFunction[0][release])
-                .min();
-        assert minVehicleResourceCost.isPresent();
-        reducedCost += minVehicleResourceCost.getAsDouble();
-        return reducedCost;
+
+        return new ColumnWithTiming(seq, vehicleRelease, startTime);
 
     }
 
