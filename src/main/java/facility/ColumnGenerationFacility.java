@@ -129,26 +129,36 @@ public class ColumnGenerationFacility implements Algorithm {
 
             pricer.end();
 
+            // extract the sequence information
+            Set<Column> useFulColSet = new HashSet<>();
+            for (ColumnWithTiming columnWithTiming : colList) {
+                    useFulColSet.add(new Column(columnWithTiming.getSeq(), columnWithTiming.getRelease()));
+            }
+
+//            LastIterationSolver solver = new LastIterationSolver(new ArrayList<>(useFulColSet));
+//            solver.solve();
+
+
             // solve the integer version
             for (GRBVar var : varMap.values()) {
                 var.set(GRB.CharAttr.VType, GRB.BINARY);
             }
 
-//            // generate other timed versions of columns
-//            List<ColumnWithTiming> additonalTimedCols = new ArrayList<>();
-//            colList.forEach(col->{
-//                List<ColumnWithTiming> colsToAdd = CPOPricerFacility.createMultipleVersion(col);
-//                colsToAdd.stream().filter(uniqColSet::add)
-//                        .forEach(additonalTimedCols::add);
-//            });
-//            // add to problem
-//            additonalTimedCols.forEach(col -> {
-//                try {
-//                    addOneCol(model, col, GRB.BINARY);
-//                } catch (GRBException e) {
-//                    e.printStackTrace();
-//                }
-//            });
+            // generate other timed versions of columns
+            List<ColumnWithTiming> additonalTimedCols = new ArrayList<>();
+            colList.forEach(col->{
+                List<ColumnWithTiming> colsToAdd = CPOPricerFacility.createMultipleVersion(col);
+                colsToAdd.stream().filter(uniqColSet::add)
+                        .forEach(additonalTimedCols::add);
+            });
+            // add to problem
+            additonalTimedCols.forEach(col -> {
+                try {
+                    addOneCol(model, col, GRB.BINARY);
+                } catch (GRBException e) {
+                    e.printStackTrace();
+                }
+            });
             model.update();
             model.getEnv().set(GRB.IntParam.OutputFlag, 1);
 //            model.getEnv().set(GRB.DoubleParam.MIPGap, 0.01); // optimality termination gap
