@@ -152,16 +152,17 @@ public class ColumnGenerationFacility implements Algorithm {
                         .forEach(additonalTimedCols::add);
             });
             // add to problem
-            additonalTimedCols.forEach(col -> {
-                try {
-                    addOneCol(model, col, GRB.BINARY);
-                } catch (GRBException e) {
-                    e.printStackTrace();
-                }
-            });
+//            additonalTimedCols.forEach(col -> {
+//                try {
+//                    addOneCol(model, col, GRB.BINARY);
+//                } catch (GRBException e) {
+//                    e.printStackTrace();
+//                }
+//            });
             model.update();
             model.getEnv().set(GRB.IntParam.OutputFlag, 1);
 //            model.getEnv().set(GRB.DoubleParam.MIPGap, 0.01); // optimality termination gap
+            model.getEnv().set(GRB.DoubleParam.TimeLimit, 300); // time limit
 
             model.optimize();
 
