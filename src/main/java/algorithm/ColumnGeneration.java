@@ -22,10 +22,14 @@ public class ColumnGeneration implements Algorithm{
     private final Map<Integer, GRBConstr> testCoverConstrs;
     private final Map<Integer, GRBConstr> vehicleCapConstrs;
 
+    private long timeInit;
+
     public ColumnGeneration() {
         testCoverConstrs = new HashMap<>();
         vehicleCapConstrs = new HashMap<>();
         varMap = new HashMap<>();
+
+        timeInit = System.currentTimeMillis();
     }
 
     // enumerate initial set of columns
@@ -72,7 +76,10 @@ public class ColumnGeneration implements Algorithm{
 
     @Override
     public void solve() {
+        System.out.println("Enumerating initial set of columns ... ");
         List<Column> colList = enumInitCol(2);
+
+        final int initColSize = colList.size();
 
         try {
             GRBEnv env = new GRBEnv();
@@ -91,6 +98,10 @@ public class ColumnGeneration implements Algorithm{
 //            Pricer pricer = new JacopPricer();
 //            Pricer pricer = new CPOPricer();
             Pricer pricer = new EnumPricer();
+
+
+            System.out.printf("[%d] - Starting column generation loop ... \n", getTimeTillNow());
+            double relaxObjVal = Double.MAX_VALUE;
             while (iterTimes++ < maxIter) {
 
                 model.optimize();
@@ -110,6 +121,7 @@ public class ColumnGeneration implements Algorithm{
                 System.out.printf("Iteration: %d, Master obj: %.3f, pricing obj: %.3f\n", iterTimes,
                         model.get(GRB.DoubleAttr.ObjVal),
                         pricer.getReducedCost());
+                relaxObjVal = model.get(GRB.DoubleAttr.ObjVal);
                 if (candidates.size()==0)
                     break;
                 // add the column to the master problem
@@ -120,11 +132,16 @@ public class ColumnGeneration implements Algorithm{
                 model.update();
             }
 
+            System.out.println("Relaxation obj val: " + relaxObjVal);
+            System.out.println("Number of iterations: " + iterTimes);
+            System.out.println("Number of columns generated: " + (colList.size()-initColSize));
+
             // solve the integer value version
             for (GRBVar var : varMap.values()) {
                 var.set(GRB.CharAttr.VType, GRB.BINARY);
             }
             model.getEnv().set(GRB.IntParam.OutputFlag, 1);
+            model.getEnv().set(GRB.DoubleParam.TimeLimit, 300); // time limit to 300 secs
 
             model.update();
             model.optimize();
@@ -132,9 +149,19 @@ public class ColumnGeneration implements Algorithm{
 
             pricer.end();
 
+            System.out.println("Done. Total time spend : " + getTimeTillNow());
+
+            model.dispose();
+            env.dispose();
+
         } catch (GRBException e) {
             e.printStackTrace();
         }
+    }
+
+    @Override
+    public long getTimeTillNow() {
+        return (System.currentTimeMillis() - timeInit)/1000;
     }
 
     public void solveFull() {
@@ -154,17 +181,18 @@ public class ColumnGeneration implements Algorithm{
     }
 
     private void printStats(GRBModel model, List<Column> colList) throws GRBException {
-        if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL) {
+        if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL
+                || model.get(GRB.IntAttr.Status) == GRB.TIME_LIMIT) {
             List<Column> usedCols = parseSol(colList);
             double tardiness = model.get(GRB.DoubleAttr.ObjVal) - usedCols.size()*Global.VEHICLE_COST;
-            System.out.println("total tardiness: " + usedCols.stream().mapToDouble(Column::getCost).sum());
+            System.out.println("Total tardiness: " + usedCols.stream().mapToDouble(Column::getCost).sum());
 
             System.out.println("Used vehicles: " + usedCols.size());
             System.out.println("Tardiness: " + tardiness);
             System.out.println("Obj val: " + model.get(GRB.DoubleAttr.ObjVal));
 
-
-            System.out.println("max activities on day " + countMaxActivityPerDay(usedCols));
+            System.out.println("Max activities on day " + countMaxActivityPerDay(usedCols));
+            System.out.println("Opt gap: " + model.get(GRB.DoubleAttr.MIPGap));
         }
     }
 

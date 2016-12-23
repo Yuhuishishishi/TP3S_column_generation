@@ -7,4 +7,6 @@ package algorithm;
  */
 public interface Algorithm {
     void solve();
+
+    long getTimeTillNow();
 }

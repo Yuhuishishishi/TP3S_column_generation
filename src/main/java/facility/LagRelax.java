@@ -189,6 +189,11 @@ public class LagRelax implements Algorithm {
 
     }
 
+    @Override
+    public long getTimeTillNow() {
+        return 0;
+    }
+
     private double twoNorm(double[] vector) {
         double result = 0;
         for (double v : vector)

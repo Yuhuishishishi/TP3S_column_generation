@@ -88,6 +88,11 @@ public class ColumnGenerationCplex implements Algorithm{
 
     }
 
+    @Override
+    public long getTimeTillNow() {
+        return 0;
+    }
+
     public void solveFull() {
         List<Column> allCols = ColumnGeneration.enumInitCol(Global.MAX_HITS);
         try {

@@ -132,6 +132,10 @@ public class ColumnGenerationFacilityCPLEX implements Algorithm {
         }
     }
 
+    @Override
+    public long getTimeTillNow() {
+        return 0;
+    }
 
 
     private List<ColumnWithTiming> parseSol(IloCplex model) throws IloException {

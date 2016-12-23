@@ -295,4 +295,9 @@ public class LastIterationSolver implements Algorithm {
 
     }
 
+    @Override
+    public long getTimeTillNow() {
+        return 0;
+    }
+
 }

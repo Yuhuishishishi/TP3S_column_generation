@@ -26,16 +26,21 @@ public class ColumnGenerationFacility implements Algorithm {
     private Map<Integer, GRBConstr> testCoverConstrs;
     private Map<Integer, GRBConstr> vehicleCapConstrs;
 
+    private long timeInit;
+
     public ColumnGenerationFacility() {
         varMap = new HashMap<>();
         resourceCapConstrs = new HashMap<>();
         testCoverConstrs = new HashMap<>();
         vehicleCapConstrs = new HashMap<>();
+
+        timeInit = System.currentTimeMillis();
     }
 
 
     @Override
     public void solve() {
+        System.out.println("Enumerating initial set of columns ... ");
         // enumerate initial set of columns
         List<Column> normalColList = enumInitCol(2);
         // transfer to subclass
@@ -50,6 +55,7 @@ public class ColumnGenerationFacility implements Algorithm {
         assert colList.size()==uniqColSet.size();
         System.out.println("unique col size: " + uniqColSet.size());
 
+        System.out.println("Solve for initial set of columns ... ");
         // get the intial solutions
         InitColDetector detector = new InitColDetector(normalColList);
         List<ColumnWithTiming> additionalCols = detector.getInitSol();
@@ -58,6 +64,8 @@ public class ColumnGenerationFacility implements Algorithm {
             if (uniqColSet.add(columnWithTiming))
                 colList.add(columnWithTiming);
         });
+
+        final int initColSize = colList.size();
 
         try {
             GRBEnv env = new GRBEnv();
@@ -79,6 +87,8 @@ public class ColumnGenerationFacility implements Algorithm {
 
 //            PricerFacility pricer = new CPOPricerFacility();
             PricerFacility pricer = new SequenceThenTimePricerFacility();
+            System.out.printf("[%d] - Starting column generation loop ... \n", getTimeTillNow());
+            double relaxObjVal = Double.MAX_VALUE;
             while (iterTimes++ < maxIter) {
                 model.optimize();
 
@@ -104,6 +114,7 @@ public class ColumnGenerationFacility implements Algorithm {
                         model.get(GRB.DoubleAttr.ObjVal),
                         pricer.getReducedCost(),
                         candidates.size());
+                relaxObjVal = model.get(GRB.DoubleAttr.ObjVal);
                 if (candidates.size()==0)
                     break;
                 // add the column to master problem
@@ -127,7 +138,10 @@ public class ColumnGenerationFacility implements Algorithm {
 
             }
             System.out.println();
-            System.out.println("Done with column generation loop.");
+            System.out.println("Relaxation obj val: " + relaxObjVal);
+            System.out.println("Number of iterations: " + iterTimes);
+            System.out.println("Number of columns generated: " + (colList.size()-initColSize));
+
 
             pricer.end();
 
@@ -164,7 +178,7 @@ public class ColumnGenerationFacility implements Algorithm {
 //                }
 //            });
 
-            System.out.println("Set up the integer problem.");
+            System.out.printf("[%d] - Solving last iteration integer formulation ... \n", getTimeTillNow());
             model.update();
             model.getEnv().set(GRB.IntParam.OutputFlag, 1);
 //            model.getEnv().set(GRB.DoubleParam.MIPGap, 0.01); // optimality termination gap
@@ -175,17 +189,26 @@ public class ColumnGenerationFacility implements Algorithm {
             if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL
                     || model.get(GRB.IntAttr.Status)==GRB.TIME_LIMIT) {
                 List<ColumnWithTiming> usedCols = parseSol(colList);
-                System.out.println("max tardiness: " + usedCols.stream().mapToDouble(ColumnWithTiming::getCost).sum());
+                System.out.println("Max tardiness: " + usedCols.stream().mapToDouble(ColumnWithTiming::getCost).sum());
                 double tardiness = model.get(GRB.DoubleAttr.ObjVal) - usedCols.size()*Global.VEHICLE_COST;
                 System.out.println("Used vehicles: " + usedCols.size());
                 System.out.println("Tardiness: " + tardiness);
                 System.out.println("Obj val: " + model.get(GRB.DoubleAttr.ObjVal));
             }
+
+            System.out.println("Done. Total time spend : " + getTimeTillNow());
+
+            model.dispose();
+            env.dispose();
         } catch (GRBException e) {
             e.printStackTrace();
         }
     }
 
+    @Override
+    public long getTimeTillNow() {
+        return (System.currentTimeMillis() - timeInit)/1000;
+    }
 
 
     private List<ColumnWithTiming> parseSol(List<ColumnWithTiming> colList) throws GRBException {

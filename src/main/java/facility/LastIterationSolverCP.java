@@ -14,13 +14,21 @@ public class LastIterationSolverCP implements Algorithm {
 
     private List<Column> colPool;
 
+    private final long timeInit;
+
     public LastIterationSolverCP(List<Column> colPool) {
         this.colPool = colPool;
+        timeInit = System.currentTimeMillis();
     }
 
     @Override
     public void solve() {
         // solve using CP algorithm
 
+    }
+
+    @Override
+    public long getTimeTillNow() {
+        return (System.currentTimeMillis()-timeInit);
     }
 }
