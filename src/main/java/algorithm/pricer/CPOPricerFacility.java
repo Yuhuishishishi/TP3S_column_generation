@@ -514,6 +514,10 @@ public class CPOPricerFacility implements PricerFacility {
     public static double reducedCost(ColumnWithTiming col, Map<Integer, Double> testDual,
                                       Map<Integer, Double> vehicleDual,
                                       Map<Integer, Double> dayDual) {
+        if (null==col)
+            return Double.MAX_VALUE;
+
+
         double reducedCostWithoutDayDual =
                 EnumPricer.reducedCost(col, testDual, vehicleDual);
         // facility duals

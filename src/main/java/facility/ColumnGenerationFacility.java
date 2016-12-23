@@ -130,8 +130,9 @@ public class ColumnGenerationFacility implements Algorithm {
 //                    System.out.println("cost 1 "  + colWithoutTime.getCost() + " cost 2: " + col.getCost());
 //                    for (int tid : col.getSeq()) {
 //                        System.out.println("\nstart " + col.getStartTimeByTid(tid));
+//                        System.out.println(DataInstance.getInstance().getTestById(tid).getRelease());
 //                    }
-//                    assert  colWithoutTime.getCost()<=col.getCost();
+                    assert  colWithoutTime.getCost()<=col.getCost();
                 }
                 System.out.print("# col added: " + realColNum + "\n");
                 model.update();
@@ -194,6 +195,8 @@ public class ColumnGenerationFacility implements Algorithm {
                 System.out.println("Used vehicles: " + usedCols.size());
                 System.out.println("Tardiness: " + tardiness);
                 System.out.println("Obj val: " + model.get(GRB.DoubleAttr.ObjVal));
+
+                System.out.println("Opt gap: " + model.get(GRB.DoubleAttr.MIPGap));
             }
 
             System.out.println("Done. Total time spend : " + getTimeTillNow());

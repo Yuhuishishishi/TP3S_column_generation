@@ -18,11 +18,80 @@ import java.io.PrintStream;
 public class RunNoFacilityVersion {
 
     public static void main(String[] args) {
+        String instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\small";
+        String outDir = "./logs/facility/small/";
+
+        // small size
+//        run(instanceDir, outDir, true);
+
+//        outDir = "./logs/small/";
+//        run(instanceDir, outDir, false);
+
+        // moderate
+        instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate";
+        outDir = "./logs/facility/moderate/";
+
+        run(instanceDir, outDir, true);
+
+        outDir = "./logs/moderate/";
+        run(instanceDir, outDir, false);
+
+        // large
+        instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\large";
+        outDir = "./logs/facility/large/";
+
+        run(instanceDir, outDir, true);
+
+        outDir = "./logs/large/";
+        run(instanceDir, outDir, false);
+
 
     }
 
-    private static void runSmall() {
-        String instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\small";
+    private static void run(String instDir, String outDir, boolean isFacilityVersion) {
+
+        try {
+            File dir = new File(instDir);
+            File[] files = dir.listFiles();
+
+            Algorithm colgenSolver;
+
+            if (files != null) {
+                for (File child : files) {
+                    System.out.println("Start solving w/o facility version " + child.getPath());
+                    String outPath = child.getName().replace("tp3s", "log");
+                    PrintStream ps = new PrintStream(outDir + outPath);
+                    System.setOut(ps);
+
+                    Reader jsonReader = new Reader(child.getAbsolutePath());
+                    DataInstance.init(jsonReader);
+                    if (!isFacilityVersion)
+                        colgenSolver = new ColumnGeneration();
+                    else
+                        colgenSolver = new ColumnGenerationFacility();
+
+                    long time = System.nanoTime();
+
+                    colgenSolver.solve();
+
+                    System.out.println("Time spent " + (System.nanoTime() - time) / 1e6 + "ms");
+
+                    ps.close();
+                }
+            } else {
+                // Handle the case where dir is not really a directory.
+                // Checking dir.isDirectory() above would not be sufficient
+                // to avoid race conditions with another process that deletes
+                // directories.
+            }
+
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private static void runModerate() {
+        String instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate";
 
         try {
             File dir = new File(instanceDir);
@@ -34,7 +103,7 @@ public class RunNoFacilityVersion {
                 for (File child : files) {
                     System.out.println("Start solving w/o facility version " + child.getPath());
                     String outPath = child.getName().replace("tp3s", "log");
-                    PrintStream ps = new PrintStream("./logs/small" + outPath);
+                    PrintStream ps = new PrintStream("./logs/moderate/" + outPath);
                     System.setOut(ps);
 
                     Reader jsonReader = new Reader(child.getAbsolutePath());
@@ -51,7 +120,7 @@ public class RunNoFacilityVersion {
 
                     // run the facility version
                     System.out.println("Start solving w/o facility version " + child.getPath());
-                    ps = new PrintStream("./logs/facility/small" + outPath);
+                    ps = new PrintStream("./logs/facility/moderate/" + outPath);
                     System.setOut(ps);
 
                     Algorithm solverFacility = new ColumnGenerationFacility();
@@ -74,9 +143,6 @@ public class RunNoFacilityVersion {
         } catch (IOException ex) {
             ex.printStackTrace();
         }
-    }
-
-    private static void runModerate() {
 
     }
 

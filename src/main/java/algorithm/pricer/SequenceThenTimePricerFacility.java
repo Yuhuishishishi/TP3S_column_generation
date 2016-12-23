@@ -59,29 +59,6 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
 
     }
 
-
-    // generate all negative columns
-    private List<ColumnWithTiming> genAllNeg(Map<Integer, Double> testDual,
-                                             Map<Integer, Double> vehicleDual,
-                                             Map<Integer, Double> dayDual) {
-        return seqPool.parallelStream()
-                .filter(seq->colReducedCost(seq, testDual, vehicleDual, dayDual) < -0.001)
-                .map(seq -> {
-                    double[][] valueFunction = optimalTimeFinding(seq, dayDual);
-                    int[] result = backTractStartTime(seq, vehicleDual, dayDual, valueFunction);
-                    int vehicleRelease = result[0];
-
-                    Map<Integer, Integer> startTime = new HashMap<>();
-                    for (int i = 1; i < result.length; i++) {
-                        startTime.put(seq.get(i-1), result[i]);
-                    }
-
-                    ColumnWithTiming col = new ColumnWithTiming(seq, vehicleRelease, startTime);
-                    return col;
-                }).collect(Collectors.toList());
-
-    }
-
     // heuristic to generate a full schedule to cover all tests
     private List<ColumnWithTiming> genFullSchedule(Map<Integer, Double> testDual,
                                                    Map<Integer, Double> vehicleDual,
@@ -182,6 +159,12 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         double[][] valueFunction = optimalTimeFinding(seq, dayDual);
         int[] result = backTractStartTime(seq, vehicleDual, dayDual, valueFunction);
         int vehicleRelease = result[0];
+
+        final int numHorizon = DataInstance.getInstance().getHorizonEnd()
+                -DataInstance.getInstance().getHorizonStart();
+
+        if (valueFunction[0][vehicleRelease] > 5*numHorizon) // infeasible
+            return null;
 
         Map<Integer, Integer> startTime = new HashMap<>();
         for (int i = 1; i < result.length; i++) {
