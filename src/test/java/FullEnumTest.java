@@ -8,6 +8,8 @@ import facility.ColumnGenerationFacility;
 import facility.ColumnGenerationFacilityCPLEX;
 import org.junit.Test;
 
+import java.io.FileNotFoundException;
+import java.io.PrintStream;
 import java.util.List;
 
 
@@ -17,7 +19,7 @@ import java.util.List;
  */
 public class FullEnumTest {
 
-    private final String filepath = "./data/156 - orig.tp3s";
+    private final String filepath = "./data/158 - orig.tp3s";
 
     @Test
     public void testGetTests() throws Exception {
@@ -60,6 +62,10 @@ public class FullEnumTest {
 
     @Test
     public void testColGenWithoutFacility() {
+        try {
+            PrintStream ps = new PrintStream("./logs/out.log");
+            System.setOut(ps);
+
         Reader jsonReader = new Reader(filepath);
         DataInstance.init(jsonReader);
 
@@ -70,6 +76,11 @@ public class FullEnumTest {
         colgenSolver.solve();
 
         System.out.println("Time spent " + (System.nanoTime()-time)/1e6 + "ms");
+
+            ps.close();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
     }
 
 

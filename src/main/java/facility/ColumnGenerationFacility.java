@@ -43,14 +43,6 @@ public class ColumnGenerationFacility implements Algorithm {
                 .map(col -> new ColumnWithTiming(col.getSeq(), col.getRelease()))
                 .collect(Collectors.toList());
 
-        // create multiple versions of columns
-//        List<ColumnWithTiming> additonalColumns = new ArrayList<>();
-//        colList.forEach(c->{
-//            List<ColumnWithTiming> moreCols = CPOPricerFacility.createMultipleVersion(c);
-//            additonalColumns.addAll(moreCols);
-//        });
-//        colList.addAll(additonalColumns);
-//        System.out.println(additonalColumns.size() + " additional cols generated.");
 
         Set<ColumnWithTiming> uniqColSet = new HashSet<>(colList);
 //        colList.clear();
@@ -122,10 +114,20 @@ public class ColumnGenerationFacility implements Algorithm {
                         colList.add(col);
                         realColNum++;
                     }
+
+                    Column colWithoutTime = new Column(col.getSeq(), col.getRelease());
+//                    System.out.println("cost 1 "  + colWithoutTime.getCost() + " cost 2: " + col.getCost());
+//                    for (int tid : col.getSeq()) {
+//                        System.out.println("\nstart " + col.getStartTimeByTid(tid));
+//                    }
+//                    assert  colWithoutTime.getCost()<=col.getCost();
                 }
                 System.out.print("# col added: " + realColNum + "\n");
                 model.update();
+
             }
+            System.out.println();
+            System.out.println("Done with column generation loop.");
 
             pricer.end();
 
@@ -134,6 +136,8 @@ public class ColumnGenerationFacility implements Algorithm {
             for (ColumnWithTiming columnWithTiming : colList) {
                     useFulColSet.add(new Column(columnWithTiming.getSeq(), columnWithTiming.getRelease()));
             }
+
+            System.out.println("Done with extracting sequence information");
 
 //            LastIterationSolver solver = new LastIterationSolver(new ArrayList<>(useFulColSet));
 //            solver.solve();
@@ -145,12 +149,12 @@ public class ColumnGenerationFacility implements Algorithm {
             }
 
             // generate other timed versions of columns
-            List<ColumnWithTiming> additonalTimedCols = new ArrayList<>();
-            colList.forEach(col->{
-                List<ColumnWithTiming> colsToAdd = CPOPricerFacility.createMultipleVersion(col);
-                colsToAdd.stream().filter(uniqColSet::add)
-                        .forEach(additonalTimedCols::add);
-            });
+//            List<ColumnWithTiming> additonalTimedCols = new ArrayList<>();
+//            colList.forEach(col->{
+//                List<ColumnWithTiming> colsToAdd = CPOPricerFacility.createMultipleVersion(col);
+//                colsToAdd.stream().filter(uniqColSet::add)
+//                        .forEach(additonalTimedCols::add);
+//            });
             // add to problem
 //            additonalTimedCols.forEach(col -> {
 //                try {
@@ -159,6 +163,8 @@ public class ColumnGenerationFacility implements Algorithm {
 //                    e.printStackTrace();
 //                }
 //            });
+
+            System.out.println("Set up the integer problem.");
             model.update();
             model.getEnv().set(GRB.IntParam.OutputFlag, 1);
 //            model.getEnv().set(GRB.DoubleParam.MIPGap, 0.01); // optimality termination gap
@@ -166,7 +172,8 @@ public class ColumnGenerationFacility implements Algorithm {
 
             model.optimize();
 
-            if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL) {
+            if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL
+                    || model.get(GRB.IntAttr.Status)==GRB.TIME_LIMIT) {
                 List<ColumnWithTiming> usedCols = parseSol(colList);
                 System.out.println("max tardiness: " + usedCols.stream().mapToDouble(ColumnWithTiming::getCost).sum());
                 double tardiness = model.get(GRB.DoubleAttr.ObjVal) - usedCols.size()*Global.VEHICLE_COST;

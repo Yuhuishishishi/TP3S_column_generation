@@ -106,6 +106,9 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
                         return 0;
                 }).collect(Collectors.toList());
 
+        lastReducedCost = CPOPricerFacility.reducedCost(sortedCol.get(0), testDual,
+                vehicleDual, dayDual);
+
         for (ColumnWithTiming mostNeg : sortedCol) {
             // pick the most negative one
 
@@ -207,6 +210,8 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
             for (int d = numHorizon - 1; d >= 0; d--) {
                 if (d + durCum > numHorizon)
                     valueFunction[i][d] = (double) numHorizon*10;
+                else if (d < test.getRelease())
+                    valueFunction[i][d] = (double) numHorizon*10;
                 else {
                     int tardiness = Math.max(d + test.getDur() - test.getDeadline(), 0);
                     double resourceCost = 0;
@@ -250,7 +255,7 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         for (int i = 0; i < seq.size(); i++) {
             double target = valueFunction[i][searchStart];
             TestRequest test = tests.get(i);
-            for (int d = searchStart; d < numHorizon; d++) {
+            for (int d = searchStart; d < numHorizon - test.getDur(); d++) {
                 int tardiness = Math.max(d + test.getDur() - test.getDeadline(), 0);
                 double resourceCost = 0;
                 int tatStart = d + test.getPrep();

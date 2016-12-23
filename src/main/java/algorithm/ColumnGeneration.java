@@ -1,6 +1,7 @@
 package algorithm;
 
 import algorithm.pricer.CPOPricer;
+import algorithm.pricer.EnumPricer;
 import algorithm.pricer.Pricer;
 import data.DataInstance;
 import facility.ColumnWithTiming;
@@ -88,8 +89,8 @@ public class ColumnGeneration implements Algorithm{
             final int maxIter = 1000;
             int iterTimes = 0;
 //            Pricer pricer = new JacopPricer();
-            Pricer pricer = new CPOPricer();
-//            Pricer pricer = new EnumPricer();
+//            Pricer pricer = new CPOPricer();
+            Pricer pricer = new EnumPricer();
             while (iterTimes++ < maxIter) {
 
                 model.optimize();
@@ -123,6 +124,8 @@ public class ColumnGeneration implements Algorithm{
             for (GRBVar var : varMap.values()) {
                 var.set(GRB.CharAttr.VType, GRB.BINARY);
             }
+            model.getEnv().set(GRB.IntParam.OutputFlag, 1);
+
             model.update();
             model.optimize();
             printStats(model, colList);
