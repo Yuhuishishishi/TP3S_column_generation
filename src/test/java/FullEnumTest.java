@@ -19,7 +19,7 @@ import java.util.List;
  */
 public class FullEnumTest {
 
-    private final String filepath = "./data/156 - orig.tp3s";
+    private final String filepath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\large\\_150_120_0.8_1.5.tp3s";
 
     @Test
     public void testGetTests() throws Exception {

@@ -73,11 +73,11 @@ public class ColumnGenerationFacility implements Algorithm {
             // suppress the log
             model.getEnv().set(GRB.IntParam.OutputFlag, 0);
 
-            // change the variables type
-            for (GRBVar var : varMap.values()) {
-                var.set(GRB.CharAttr.VType, GRB.CONTINUOUS);
-                var.set(GRB.DoubleAttr.UB, GRB.INFINITY);
-            }
+//            // change the variables type
+//            for (GRBVar var : varMap.values()) {
+//                var.set(GRB.CharAttr.VType, GRB.CONTINUOUS);
+//                var.set(GRB.DoubleAttr.UB, GRB.INFINITY);
+//            }
             model.update();
 
             // ================================= Column Generation Loop ================================================
@@ -132,6 +132,9 @@ public class ColumnGenerationFacility implements Algorithm {
 //                        System.out.println("\nstart " + col.getStartTimeByTid(tid));
 //                        System.out.println(DataInstance.getInstance().getTestById(tid).getRelease());
 //                    }
+//
+//                    double[][] value = SequenceThenTimePricerFacility.optimalTimeFinding(col.getSeq(), dayDual);
+//                    SequenceThenTimePricerFacility.backTractStartTime(col.getSeq(), vehicleDual, dayDual, value);
                     assert  colWithoutTime.getCost()<=col.getCost();
                 }
                 System.out.print("# col added: " + realColNum + "\n");
@@ -258,7 +261,7 @@ public class ColumnGenerationFacility implements Algorithm {
         // add variables
 
         for (ColumnWithTiming col : colList) {
-            addOneCol(model, col, GRB.BINARY);
+            addOneCol(model, col, GRB.CONTINUOUS);
         }
 
         model.update();
@@ -275,10 +278,10 @@ public class ColumnGenerationFacility implements Algorithm {
         GRBVar v;
         if (vtype == GRB.BINARY)
             v = model.addVar(0, 1, col.getCost() + Global.VEHICLE_COST,
-                    GRB.BINARY, grbColumn, "use col " + col.getSeq());
+                    GRB.BINARY, grbColumn, null);
         else
             v = model.addVar(0, GRB.INFINITY, col.getCost() + Global.VEHICLE_COST,
-                    GRB.CONTINUOUS, grbColumn, "use col " + col.getSeq());
+                    GRB.CONTINUOUS, grbColumn, null);
 
         varMap.put(col, v);
     }

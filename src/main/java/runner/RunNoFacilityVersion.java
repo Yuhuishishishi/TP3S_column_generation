@@ -28,22 +28,26 @@ public class RunNoFacilityVersion {
 //        run(instanceDir, outDir, false);
 
         // moderate
-        instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate";
-        outDir = "./logs/facility/moderate/";
+//        instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate";
+//
+//
+//        outDir = "./logs/moderate/";
+//        run(instanceDir, outDir, false);
+//
+//        outDir = "./logs/facility/moderate/";
+//        run(instanceDir, outDir, true);
 
-        run(instanceDir, outDir, true);
-
-        outDir = "./logs/moderate/";
-        run(instanceDir, outDir, false);
 
         // large
         instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\large";
-        outDir = "./logs/facility/large/";
 
-        run(instanceDir, outDir, true);
 
         outDir = "./logs/large/";
         run(instanceDir, outDir, false);
+
+        outDir = "./logs/facility/large/";
+        run(instanceDir, outDir, true);
+
 
 
     }

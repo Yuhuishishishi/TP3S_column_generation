@@ -163,7 +163,7 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         final int numHorizon = DataInstance.getInstance().getHorizonEnd()
                 -DataInstance.getInstance().getHorizonStart();
 
-        if (valueFunction[0][vehicleRelease] > 5*numHorizon) // infeasible
+        if (valueFunction[0][vehicleRelease] > 9*numHorizon) // infeasible
             return null;
 
         Map<Integer, Integer> startTime = new HashMap<>();
@@ -175,7 +175,7 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
 
     }
 
-    private double[][] optimalTimeFinding(List<Integer> seq,
+    public static double[][] optimalTimeFinding(List<Integer> seq,
                                           Map<Integer, Double> dayDual
     ) {
         // find the optimal time setting for a sequence, given the dual value
@@ -217,7 +217,7 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         return valueFunction;
     }
 
-    private int[] backTractStartTime(List<Integer> seq,
+    public static int[] backTractStartTime(List<Integer> seq,
                                      Map<Integer, Double> vehicleDual,
                                      Map<Integer, Double> dayDual,
                                      double[][] valueFunction) {
