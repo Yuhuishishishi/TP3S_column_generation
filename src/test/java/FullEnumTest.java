@@ -19,7 +19,7 @@ import java.util.List;
  */
 public class FullEnumTest {
 
-    private final String filepath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\large\\_150_120_0.8_1.5.tp3s";
+    private final String filepath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate\\core\\_90_72_0.9_2.0.tp3s";
 
     @Test
     public void testGetTests() throws Exception {
@@ -62,9 +62,7 @@ public class FullEnumTest {
 
     @Test
     public void testColGenWithoutFacility() {
-        try {
-            PrintStream ps = new PrintStream("./logs/out.log");
-            System.setOut(ps);
+
 
         Reader jsonReader = new Reader(filepath);
         DataInstance.init(jsonReader);
@@ -77,10 +75,7 @@ public class FullEnumTest {
 
         System.out.println("Time spent " + (System.nanoTime()-time)/1e6 + "ms");
 
-            ps.close();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }
+
     }
 
 
