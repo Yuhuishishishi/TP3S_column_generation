@@ -18,11 +18,22 @@ public class RunBranchAndPrice {
 
     public static void main(String[] args) {
 
-//        String filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate\\core\\";
-        String filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate\\core\\_90_72_0.9_2.0.tp3s";
-        runOneInstance(filePath);
 
-//        run(filePath, "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\logs\\branchandprice\\moderate");
+        // moderate
+        String filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate";
+        run(filePath, "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\logs\\branchandprice\\moderate");
+
+        // small
+        filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\small";
+        run(filePath, "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\logs\\branchandprice\\small");
+
+
+        // large
+        filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\large";
+        run(filePath, "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\logs\\branchandprice\\large");
+
+//        String filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate\\core\\_80_64_0.9_2.0.tp3s";
+//        runOneInstance(filePath);
     }
 
     private static void run(String instDir, String outDir) {
@@ -34,6 +45,8 @@ public class RunBranchAndPrice {
 
             if (files != null) {
                 for (File child : files) {
+                    if (child.isDirectory())
+                        continue;
                     System.out.println("Running branch and price " + child.getPath());
                     String outPath = child.getName().replace("tp3s", "log");
                     PrintStream ps = null;

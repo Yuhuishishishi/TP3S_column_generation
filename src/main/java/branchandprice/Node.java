@@ -9,13 +9,15 @@ import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+
+
 /**
  * Created by yuhuishi on 12/18/2016.
  * University of Michigan
  * Academic use only
  */
 public class Node implements Comparable<Node> {
-    private static int NODE_ID_COUNTER = 0;
+    public static int NODE_ID_COUNTER = 0;
 
 
     private final int nodeID;
@@ -79,7 +81,12 @@ public class Node implements Comparable<Node> {
 
             // if node id is even, solve the integer version of the problem to update the best incumbent value
             List<Column> integerSolution;
-            if (this.nodeID % BranchAndPrice.SOLVE_INTEGER_PROBLEM_INTERVAL == 0) {
+
+            double rndNumber = BranchAndPrice.rnd.nextDouble();
+
+//            if (this.nodeID % BranchAndPrice.SOLVE_INTEGER_PROBLEM_INTERVAL == 0) {
+            if (rndNumber > 1-1.0/BranchAndPrice.SOLVE_INTEGER_PROBLEM_INTERVAL
+                    || nodeID==0) {
                 // solve the integer problem
                 Logger.getAnonymousLogger().info("Solving integer problem to get incumbent...");
                 integerSolution = lpSolver.solveIntegerProblem();
@@ -296,5 +303,9 @@ public class Node implements Comparable<Node> {
 
     public double getObjVal() {
         return objVal;
+    }
+
+    public double getLowerbound() {
+        return lowerBound;
     }
 }

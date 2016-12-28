@@ -16,10 +16,12 @@ import java.util.*;
  */
 public class BranchAndPrice implements Algorithm {
 
-    public static final int SOLVE_INTEGER_PROBLEM_INTERVAL = 1;
+    public static final int SOLVE_INTEGER_PROBLEM_INTERVAL = 5;
     public static final int INTEGER_PROBLEM_TIME_LIMIT = 300;
     public static final int MAX_ITERATIONS = 9999;
     public static final int MAX_NODE = 999;
+    public static final int TIME_LIMIT = 1800;
+    public static Random rnd = new Random();
 
 
     // singleton implementation
@@ -28,9 +30,7 @@ public class BranchAndPrice implements Algorithm {
     private final long initTime;
 
     private int nodesExplored;
-
     private double upperbound;
-
     private List<Column> bestIncumbent;
 
     private GRBEnv grbEnv;
@@ -62,21 +62,38 @@ public class BranchAndPrice implements Algorithm {
         // solve the root relaxation
         int nodesProcessed = 0;
         double rootObj = 0;
+        double lowerBound = 0;
+        double optGap = 1;
         Node root = new Node(initCols, new ArrayList<>(), -Double.MAX_VALUE);
         try {
             this.offerNode(root);
             while (!isQueueEmpty()) {
                 System.out.println("Remaining nodes: " + queueSize());
+                // update the lowerbound
+                if (pendingNodeBestBound.size() != 0) {
+                    if (pendingNodeBestBound.peek().getLowerbound() < upperbound)
+                        lowerBound = pendingNodeBestBound.peek().getLowerbound();
+                }
+
                 Node nodeToProcess = getPendingNode();
                 if (!nodeToProcess.isProcessed())
                     nodesProcessed++;
                 nodeToProcess.process();
-                if (nodesProcessed==1)
+                if (nodesProcessed == 1)
                     rootObj = nodeToProcess.getObjVal();
-            }
 
-            if (nodesProcessed > MAX_NODE) {
-                System.out.println("Termination due to MAX_NODE_REACHED.");
+                if (getTimeTillNow() / 1000 > 600
+                        && (upperbound - lowerBound) / lowerBound < 0.01) { // if has run for 10 minutes and gap < 1% terminate
+                    System.out.println("Termination due to TIME LIMIT");
+                    break;
+                }
+
+
+                if (getTimeTillNow() / 1000 > TIME_LIMIT) {
+                    System.out.println("Termination due to TIME LIMIT");
+                    break;
+                }
+
             }
 
 
@@ -85,22 +102,24 @@ public class BranchAndPrice implements Algorithm {
         }
 
         // parse the solution
-        assert bestIncumbent.size()>0;
+        assert bestIncumbent.size() > 0;
         System.out.println("Used vehicles: " + bestIncumbent.size());
         double tardiness = bestIncumbent.stream().mapToDouble(Column::getCost).sum();
         System.out.println("Tardiness: " + tardiness);
         System.out.println("Obj val: " + upperbound);
-        System.out.println("Nodes explored: " + nodesProcessed);
-        assert rootObj>0;
+        System.out.println("Nodes explored: " + Node.NODE_ID_COUNTER);
+        assert rootObj > 0;
         assert upperbound < Double.MAX_VALUE;
 
-        System.out.println("Obj val: " + (upperbound-rootObj)/rootObj);
+        System.out.println("Root obj val: " + rootObj);
+        System.out.println("Best bound: " + lowerBound);
+        System.out.println("Opt gap: " + (upperbound - lowerBound) / lowerBound);
 
     }
 
     @Override
     public long getTimeTillNow() {
-        return System.currentTimeMillis()-initTime;
+        return System.currentTimeMillis() - initTime;
     }
 
     private Node getBestBoundNode() {
@@ -113,7 +132,7 @@ public class BranchAndPrice implements Algorithm {
 
     private Node getPendingNode() {
         nodesExplored++;
-        if (nodesExplored % 2==0)
+        if (nodesExplored % 2 == 0)
             return getBestBoundNode();
         else
             return getNextPendingNode();
@@ -164,7 +183,8 @@ public class BranchAndPrice implements Algorithm {
     public void destroy() {
         try {
             grbEnv.dispose();
-            this.branchTree = null;
+            branchTree = null;
+            Node.NODE_ID_COUNTER = 0;
         } catch (GRBException e) {
             e.printStackTrace();
         }
