@@ -184,6 +184,7 @@ public class BranchAndPrice implements Algorithm {
         try {
             grbEnv.dispose();
             branchTree = null;
+            EnumPricerWithBranchConstraints.destroyPricer();
             Node.NODE_ID_COUNTER = 0;
         } catch (GRBException e) {
             e.printStackTrace();

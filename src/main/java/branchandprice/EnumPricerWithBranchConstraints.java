@@ -113,4 +113,8 @@ public class EnumPricerWithBranchConstraints implements Pricer {
     public void end() {
         // do nothing
     }
+
+    public static void destroyPricer() {
+        pricer = null;
+    }
 }
