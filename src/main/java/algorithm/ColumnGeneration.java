@@ -168,9 +168,14 @@ public class ColumnGeneration implements Algorithm{
         // enumerate initial set of columns
         List<Column> colList = enumInitCol(Global.MAX_HITS);
 
+        System.out.println("Total number of columns: " + colList.size());
         try {
             GRBEnv env = new GRBEnv();
             GRBModel model = buildModel(env, colList);
+            model.getEnv().set(GRB.IntParam.OutputFlag, 1);
+            model.getEnv().set(GRB.DoubleParam.TimeLimit, 600); // time limit to 600 secs
+
+
             model.optimize();
 
             printStats(model, colList);

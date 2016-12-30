@@ -19,20 +19,21 @@ public class RunNoFacilityVersion {
 
     public static void main(String[] args) {
         String instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\small";
-        String outDir = "./logs/facility/small/";
+        String outDir = "./logs/fullenum/small";
 
         // small size
 //        run(instanceDir, outDir, true);
+//        runFullEnum(instanceDir, outDir);
 
 //        outDir = "./logs/small/";
 //        run(instanceDir, outDir, false);
 
         // moderate
-//        instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate";
-//
-//
-//        outDir = "./logs/moderate/";
+        instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate";
+        outDir = "./logs/fullenum/moderate";
 //        run(instanceDir, outDir, false);
+        runFullEnum(instanceDir, outDir);
+
 //
 //        outDir = "./logs/facility/moderate/";
 //        run(instanceDir, outDir, true);
@@ -40,13 +41,13 @@ public class RunNoFacilityVersion {
 
         // large
         instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\large";
+        outDir = "./logs/fullenum/large";
 
+        runFullEnum(instanceDir, outDir);
+//        run(instanceDir, outDir, false);
 
-        outDir = "./logs/large/";
-        run(instanceDir, outDir, false);
-
-        outDir = "./logs/facility/large/";
-        run(instanceDir, outDir, true);
+//        outDir = "./logs/facility/large/";
+//        run(instanceDir, outDir, true);
 
 
 
@@ -94,46 +95,34 @@ public class RunNoFacilityVersion {
         }
     }
 
-    private static void runModerate() {
-        String instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate";
+    private static void runFullEnum(String instDir, String outDir) {
 
         try {
-            File dir = new File(instanceDir);
+            File dir = new File(instDir);
             File[] files = dir.listFiles();
 
-            Algorithm colgenSolver;
+            ColumnGeneration fullEnumSolver = new ColumnGeneration();
 
             if (files != null) {
                 for (File child : files) {
-                    System.out.println("Start solving w/o facility version " + child.getPath());
+                    if (child.isDirectory())
+                        continue;
+
+                    System.out.println("Start solving with Full Enumeration algorithm " + child.getPath());
                     String outPath = child.getName().replace("tp3s", "log");
-                    PrintStream ps = new PrintStream("./logs/moderate/" + outPath);
+                    PrintStream ps = new PrintStream(outDir + outPath);
                     System.setOut(ps);
 
                     Reader jsonReader = new Reader(child.getAbsolutePath());
                     DataInstance.init(jsonReader);
-                    colgenSolver = new ColumnGeneration();
 
                     long time = System.nanoTime();
 
-                    colgenSolver.solve();
+                    fullEnumSolver.solveFull();
 
                     System.out.println("Time spent " + (System.nanoTime() - time) / 1e6 + "ms");
 
                     ps.close();
-
-                    // run the facility version
-                    System.out.println("Start solving w/o facility version " + child.getPath());
-                    ps = new PrintStream("./logs/facility/moderate/" + outPath);
-                    System.setOut(ps);
-
-                    Algorithm solverFacility = new ColumnGenerationFacility();
-
-                    solverFacility.solve();
-
-
-                    ps.close();
-
                 }
             } else {
                 // Handle the case where dir is not really a directory.
@@ -142,15 +131,8 @@ public class RunNoFacilityVersion {
                 // directories.
             }
 
-
-
         } catch (IOException ex) {
             ex.printStackTrace();
         }
-
-    }
-
-    private static void runLarge() {
-
     }
 }

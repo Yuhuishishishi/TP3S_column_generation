@@ -6,9 +6,6 @@ import data.TestRequest;
 import gurobi.*;
 import utils.Global;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Created by yuhuishi on 12/27/2016.
  * University of Michigan
