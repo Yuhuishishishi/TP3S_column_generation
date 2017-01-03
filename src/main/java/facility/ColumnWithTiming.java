@@ -23,8 +23,24 @@ public class ColumnWithTiming extends Column {
         this.cost = calacColCost();
     }
 
+
+    public ColumnWithTiming(String instID, List<Integer> seq, int release) {
+        super(instID, seq, release);
+        // use default timing options
+        this.startTimeMap = defaultStartTime();
+        this.resourceSet = resourceBasedOnStart();
+        this.cost = calacColCost();
+    }
+
     public ColumnWithTiming(List<Integer> seq, int release, Map<Integer, Integer> startTimeMap) {
         super(seq, release);
+        this.startTimeMap = startTimeMap;
+        this.resourceSet = resourceBasedOnStart();
+        this.cost = calacColCost();
+    }
+
+    public ColumnWithTiming(String instID, List<Integer> seq, int release, Map<Integer, Integer> startTimeMap) {
+        super(instID, seq, release);
         this.startTimeMap = startTimeMap;
         this.resourceSet = resourceBasedOnStart();
         this.cost = calacColCost();
@@ -34,7 +50,7 @@ public class ColumnWithTiming extends Column {
         Map<Integer, Integer> startTimeMap = new HashMap<>();
         int start = this.release;
         for (int tid : this.seq) {
-            TestRequest test = DataInstance.getInstance().getTestById(tid);
+            TestRequest test = DataInstance.getInstance(instID).getTestById(tid);
 
             if (start + test.getPrep() < test.getRelease()) {
                 startTimeMap.put(tid, test.getRelease());
@@ -52,7 +68,7 @@ public class ColumnWithTiming extends Column {
         this.startTimeMap.entrySet().forEach(e -> {
             int tid = e.getKey();
             int start = e.getValue();
-            TestRequest test = DataInstance.getInstance().getTestById(tid);
+            TestRequest test = DataInstance.getInstance(instID).getTestById(tid);
             int tat_start = start + test.getPrep();
             int tat_end = start + test.getPrep() + test.getTat();
             for (int d = tat_start; d < tat_end; d++) {
@@ -69,8 +85,8 @@ public class ColumnWithTiming extends Column {
     private double calacColCost() {
         // compute the column cost based on start time of tests
         return this.seq.stream().mapToInt(tid -> Math.max(startTimeMap.get(tid)
-                + DataInstance.getInstance().getTestById(tid).getDur()
-                - DataInstance.getInstance().getTestById(tid).getDeadline(), 0))
+                + DataInstance.getInstance(instID).getTestById(tid).getDur()
+                - DataInstance.getInstance(instID).getTestById(tid).getDeadline(), 0))
                 .sum();
 
     }

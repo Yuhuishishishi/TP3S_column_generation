@@ -16,8 +16,21 @@ import java.util.stream.Collectors;
  */
 public class SequenceThenTimePricerFacility implements PricerFacility {
 
+    private String instID;
     private double lastReducedCost;
     private List<List<Integer>> seqPool;
+
+    public SequenceThenTimePricerFacility(String instID) {
+        this.instID = instID;
+        this.lastReducedCost = Double.MAX_VALUE;
+        initSeqPool();
+    }
+
+    public SequenceThenTimePricerFacility() {
+        this.instID = DataInstance.getInstance().getInstID();
+        this.lastReducedCost = Double.MAX_VALUE;
+        initSeqPool();
+    }
 
     @Override
     public List<ColumnWithTiming> price(
@@ -26,33 +39,6 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         // lazy initialization of seq pool
         if (null == seqPool)
             initSeqPool();
-
-//        // find the minimum one
-//        Optional<List<Integer>> minSeq = this.seqPool.parallelStream()
-//                .reduce((s1, s2) -> colReducedCost(s1, testDual, vehicleDual, dayDual) < colReducedCost(s2, testDual, vehicleDual, dayDual) ?
-//                        s1 : s2);
-//        assert minSeq.isPresent();
-//        this.lastReducedCost = colReducedCost(minSeq.get(), testDual, vehicleDual, dayDual);
-//
-//        // negative
-//        if (lastReducedCost < -0.001) {
-//            // backtrack to figure out the timing
-//            double[][] valueFunction = optimalTimeFinding(minSeq.get(), dayDual);
-//            int[] result = backTractStartTime(minSeq.get(), vehicleDual, dayDual, valueFunction);
-//            int vehicleRelease = result[0];
-//
-//            Map<Integer, Integer> startTime = new HashMap<>();
-//            for (int i = 1; i < result.length; i++) {
-//                startTime.put(minSeq.get().get(i-1), result[i]);
-//            }
-//
-//            ColumnWithTiming col = new ColumnWithTiming(minSeq.get(), vehicleRelease, startTime);
-//
-//            return new ArrayList<>(Collections.singletonList(col));
-//        }
-//
-//
-//        return new ArrayList<>();
 
         return genFullSchedule(testDual, vehicleDual, dayDual);
 //            return genAllNeg(testDual, vehicleDual, dayDual);
@@ -66,7 +52,7 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         List<ColumnWithTiming> colList = new ArrayList<>();
 
         Map<Integer, Boolean> testCovered = new HashMap<>();
-        DataInstance.getInstance().getTidList()
+        DataInstance.getInstance(instID).getTidList()
                 .forEach(tid->testCovered.put(tid, false));
 
         // sort the seq pool
@@ -124,7 +110,7 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
 
     private void initSeqPool() {
         System.out.println("Initializing the column pool in the pricer ... ");
-        List<Column> colPool = ColumnGeneration.enumInitCol(Global.MAX_HITS);
+        List<Column> colPool = ColumnGeneration.enumInitCol(instID, Global.MAX_HITS);
         Set<List<Integer>> seqSet = colPool.stream().map(Column::getSeq).collect(Collectors.toSet());
         this.seqPool = new ArrayList<>(seqSet);
     }
@@ -160,8 +146,8 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         int[] result = backTractStartTime(seq, vehicleDual, dayDual, valueFunction);
         int vehicleRelease = result[0];
 
-        final int numHorizon = DataInstance.getInstance().getHorizonEnd()
-                -DataInstance.getInstance().getHorizonStart();
+        final int numHorizon = DataInstance.getInstance(instID).getHorizonEnd()
+                -DataInstance.getInstance(instID).getHorizonStart();
 
         if (valueFunction[0][vehicleRelease] > 9*numHorizon) // infeasible
             return null;
@@ -171,18 +157,18 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
             startTime.put(seq.get(i-1), result[i]);
         }
 
-        return new ColumnWithTiming(seq, vehicleRelease, startTime);
+        return new ColumnWithTiming(instID, seq, vehicleRelease, startTime);
 
     }
 
-    public static double[][] optimalTimeFinding(List<Integer> seq,
+    private double[][] optimalTimeFinding(List<Integer> seq,
                                           Map<Integer, Double> dayDual
     ) {
         // find the optimal time setting for a sequence, given the dual value
         final int numTest = seq.size();
-        final int numHorizon = DataInstance.getInstance().getHorizonEnd()
-                - DataInstance.getInstance().getHorizonStart() + 1;
-        List<TestRequest> tests = seq.stream().map(tid -> DataInstance.getInstance().getTestById(tid))
+        final int numHorizon = DataInstance.getInstance(instID).getHorizonEnd()
+                - DataInstance.getInstance(instID).getHorizonStart() + 1;
+        List<TestRequest> tests = seq.stream().map(tid -> DataInstance.getInstance(instID).getTestById(tid))
                 .collect(Collectors.toList());
 
         double[][] valueFunction = new double[numTest][numHorizon];
@@ -217,13 +203,14 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         return valueFunction;
     }
 
-    public static int[] backTractStartTime(List<Integer> seq,
+    private int[] backTractStartTime(List<Integer> seq,
                                      Map<Integer, Double> vehicleDual,
                                      Map<Integer, Double> dayDual,
                                      double[][] valueFunction) {
-        final int numHorizon = DataInstance.getInstance().getHorizonEnd()
-                - DataInstance.getInstance().getHorizonStart() + 1;
-        List<TestRequest> tests = seq.stream().map(tid -> DataInstance.getInstance().getTestById(tid))
+        final int numHorizon = DataInstance.getInstance(instID).getHorizonEnd()
+                - DataInstance.getInstance(instID).getHorizonStart() + 1;
+        final int offset = DataInstance.getInstance(instID).getHorizonStart();
+        List<TestRequest> tests = seq.stream().map(tid -> DataInstance.getInstance(instID).getTestById(tid))
                 .collect(Collectors.toList());
 
         // which vehicle to pair

@@ -32,16 +32,14 @@ public class ColumnGeneration implements Algorithm{
         timeInit = System.currentTimeMillis();
     }
 
-    // enumerate initial set of columns
-    public static List<Column> enumInitCol(int maxLevel) {
-
+    public static List<Column> enumInitCol(String instID, int maxLevel) {
         // enumerate the sequence first
         List<List<Integer>> seqList = new ArrayList<>();
         final List<List<Integer>> curr_lvl = new ArrayList<>();
 
         int lvl = 1;
         // the single ones
-        DataInstance.getInstance().getTidList()
+        DataInstance.getInstance(instID).getTidList()
                 .forEach(tid -> curr_lvl.add(Collections.singletonList(tid)));
         seqList.addAll(curr_lvl);
         System.out.printf("Level: %d, # seq: %d\n", lvl, curr_lvl.size());
@@ -49,8 +47,9 @@ public class ColumnGeneration implements Algorithm{
         while (lvl++ < maxLevel) {
             List<List<Integer>> nxt_lvl = new ArrayList<>();
             for (List<Integer> seq : curr_lvl) {
-                DataInstance.getInstance().getTidList().stream()
-                        .filter(tid -> DataInstance.isSeqCompWithTest(seq, tid)).forEach(tid -> {
+                DataInstance.getInstance(instID).getTidList().stream()
+                        .filter(tid -> DataInstance.getInstance(instID)
+                                .isSeqCompWithTest(seq, tid)).forEach(tid -> {
                     List<Integer> newSeq = new ArrayList<>(seq);
                     newSeq.add(tid);
                     nxt_lvl.add(newSeq);
@@ -67,11 +66,16 @@ public class ColumnGeneration implements Algorithm{
         List<Column> colList = new ArrayList<>();
         // pair with release to create columns
         seqList.forEach(
-                seq -> DataInstance.getInstance().getVehicleReleaseList()
-                        .forEach(release -> colList.add(new Column(seq, release)))
+                seq -> DataInstance.getInstance(instID).getVehicleReleaseList()
+                        .forEach(release -> colList.add(new Column(instID, seq, release)))
         );
         return colList;
+    }
 
+    // enumerate initial set of columns
+    public static List<Column> enumInitCol(int maxLevel) {
+        String instID = DataInstance.getInstance().getInstID();
+        return enumInitCol(instID, maxLevel);
     }
 
     @Override

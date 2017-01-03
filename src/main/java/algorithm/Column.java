@@ -15,11 +15,22 @@ public class Column {
     protected double cost;
     protected final List<Integer> seq;
     protected final int release;
+    protected final String instID;
 
     public Column(List<Integer> seq, int release) {
         this.seq = seq;
         this.release = release;
         this.cost = this.calacCost();
+
+        instID = DataInstance.getInstance().getInstID();
+    }
+
+    public Column(String instID, List<Integer> seq, int release) {
+        this.instID = instID;
+
+        this.seq = seq;
+        this.release = release;
+        this.cost = calacCost();
     }
 
 
@@ -28,7 +39,7 @@ public class Column {
 
         double cost = 0;
         for (int tid : this.seq) {
-            TestRequest test = DataInstance.getInstance().getTestById(tid);
+            TestRequest test = DataInstance.getInstance(instID).getTestById(tid);
             if (release + test.getPrep() < test.getRelease()) {
                 release = test.getRelease() + test.getTat() + test.getAnalysis();
             } else {

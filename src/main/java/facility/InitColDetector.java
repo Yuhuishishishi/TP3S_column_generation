@@ -20,9 +20,17 @@ import java.util.stream.Collectors;
  * Academic use only
  */
 public class InitColDetector {
+    private final String instID;
     private List<Column> allColList;
 
     public InitColDetector(List<Column> allColList) {
+        instID = DataInstance.getInstance().getInstID();
+        this.allColList = new ArrayList<>();
+        this.allColList.addAll(allColList);
+    }
+
+    public InitColDetector(String instID, List<Column> allColList) {
+        this.instID = instID;
         this.allColList = new ArrayList<>();
         this.allColList.addAll(allColList);
     }
@@ -41,15 +49,15 @@ public class InitColDetector {
 
 
             // test cover constraints
-            for (int tid : DataInstance.getInstance().getTidList()) {
+            for (int tid : DataInstance.getInstance(instID).getTidList()) {
                 testCoverConstrs.put(tid, model.addConstr(
                         new GRBLinExpr(), GRB.GREATER_EQUAL, 1.0, "cover test " + tid));
             }
 
             // vehicle capacity constraints
-            for (int release : DataInstance.getInstance().getVehicleReleaseList()) {
+            for (int release : DataInstance.getInstance(instID).getVehicleReleaseList()) {
                 vehicleCapConstrs.put(release, model.addConstr(
-                        new GRBLinExpr(), GRB.LESS_EQUAL, DataInstance.getInstance().numVehiclesByRelease(release),
+                        new GRBLinExpr(), GRB.LESS_EQUAL, DataInstance.getInstance(instID).numVehiclesByRelease(release),
                         "vehicle capacity " + release
                 ));
             }
@@ -96,7 +104,7 @@ public class InitColDetector {
         analysis = new HashMap<>();
         dur = new HashMap<>();
 
-        DataInstance.getInstance().getTestArr().forEach(testRequest -> {
+        DataInstance.getInstance(instID).getTestArr().forEach(testRequest -> {
             try {
                 int tid = testRequest.getTid();
                 prep.put(tid, model.intervalVar(testRequest.getPrep()));
@@ -117,7 +125,7 @@ public class InitColDetector {
             List<Integer> seq = col.getSeq();
             for (int i = 0; i < seq.size(); i++) {
                 int tid = seq.get(i);
-                TestRequest test = DataInstance.getInstance().getTestById(tid);
+                TestRequest test = DataInstance.getInstance(instID).getTestById(tid);
 
                 // span constraints, relations between different stages
                 IloIntervalVar durVar = dur.get(tid);
@@ -176,7 +184,7 @@ public class InitColDetector {
                 });
 
                 // convert to column with timing
-                ColumnWithTiming colWithTime = new ColumnWithTiming(col.getSeq(), col.getRelease(),
+                ColumnWithTiming colWithTime = new ColumnWithTiming(instID, col.getSeq(), col.getRelease(),
                         startTime);
                 result.add(colWithTime);
             }
