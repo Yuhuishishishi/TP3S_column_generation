@@ -16,6 +16,8 @@ import java.util.stream.Collectors;
  */
 public class SequenceThenTimePricerFacility implements PricerFacility {
 
+    // TODO: need to fix the offset problem
+
     private String instID;
     private double lastReducedCost;
     private List<List<Integer>> seqPool;

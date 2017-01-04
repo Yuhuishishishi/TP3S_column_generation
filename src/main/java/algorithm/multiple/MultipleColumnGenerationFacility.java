@@ -3,12 +3,12 @@ package algorithm.multiple;
 import algorithm.Algorithm;
 import algorithm.Column;
 import algorithm.ColumnGeneration;
-import algorithm.pricer.Pricer;
 import algorithm.pricer.PricerFacility;
 import algorithm.pricer.SequenceThenTimePricerFacility;
 import data.DataInstance;
 import facility.ColumnWithTiming;
-import facility.InitColDetector;
+import facility.MultipleInitColDetector;
+import facility.WarmupAlgorithm;
 import gurobi.*;
 import utils.Global;
 
@@ -48,20 +48,22 @@ public class MultipleColumnGenerationFacility implements Algorithm {
         Map<String, Set<ColumnWithTiming>> initColList = new HashMap<>();
         for (String instID : DataInstance.getInstIds()) {
             List<Column> normalCols = ColumnGeneration.enumInitCol(instID, 2);
-            // two stage method to add additional columns
-            InitColDetector detector = new InitColDetector(instID, normalCols);
-            List<ColumnWithTiming> additionalCols = detector.getInitSol();
 
             // transfer to timed version
-
             Set<ColumnWithTiming> colSet = normalCols.stream()
                     .map(col -> new ColumnWithTiming(instID, col.getSeq(), col.getRelease())).collect(Collectors.toSet());
-            additionalCols.stream().forEach(colSet::add);
             initColList.put(instID, colSet);
         }
+        // add additional columns
+        WarmupAlgorithm detector = new MultipleInitColDetector();
+        List<ColumnWithTiming> additionalCols = detector.getInitSol();
+        System.out.println("Additional cols size: " + additionalCols.size());
+        additionalCols.forEach(col-> initColList.get(col.getInstID()).add(col));
 
+        final int initColSize = initColList.values().stream().mapToInt(Set::size).sum();
 
         // build the initial model
+        double relaxObjVal = 0;
         try {
             GRBEnv env = new GRBEnv();
             GRBModel model = buildModel(env, initColList);
@@ -78,7 +80,9 @@ public class MultipleColumnGenerationFacility implements Algorithm {
                 boolean noNewCols = true;
                 model.optimize();
 
+                assert model.get(GRB.IntAttr.Status)==GRB.OPTIMAL;
 
+                relaxObjVal = model.get(GRB.DoubleAttr.ObjVal);
                 System.out.printf("Iteration: %d, Master obj: %.3f \n", iterTimes,
                         model.get(GRB.DoubleAttr.ObjVal));
 
@@ -108,9 +112,9 @@ public class MultipleColumnGenerationFacility implements Algorithm {
 
                     // add the columns
                     for (ColumnWithTiming candidate : candidates) {
-                        addOneCol(model, candidate, instID);
+                        if (initColList.get(instID).add(candidate))
+                            addOneCol(model, candidate, instID);
                     }
-                    model.update();
 
                     if (candidates.size()>0)
                         noNewCols=false;
@@ -118,21 +122,63 @@ public class MultipleColumnGenerationFacility implements Algorithm {
                     System.out.printf("inst id: %s pricing, added %d cols, pricing obj: %.3f\n",
                             instID, candidates.size(), pricer.getReducedCost());
                 }
-                if (noNewCols)
-                    break;
 
-                //
+                model.update();
+
+                if (noNewCols)
+                    break;//
+            }
+
+            System.out.println();
+            System.out.println("Relaxation obj val: " + relaxObjVal);
+            System.out.println("Number of iterations: " + iterTimes);
+            System.out.println("Number of columns generated: " + (varMap.values().stream()
+                    .mapToInt(Map::size).sum()-initColSize));
+
+            // solve the integer version
+            for (Map<ColumnWithTiming, GRBVar> columnWithTimingGRBVarMap : varMap.values()) {
+                for (GRBVar grbVar : columnWithTimingGRBVarMap.values()) {
+                    grbVar.set(GRB.CharAttr.VType, GRB.BINARY);
+                }
+            }
+
+            model.getEnv().set(GRB.IntParam.OutputFlag, 1);
+            model.getEnv().set(GRB.DoubleParam.TimeLimit, 600); // time limit 10 mins
+            model.optimize();
+
+
+            if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL
+                    || model.get(GRB.IntAttr.Status)==GRB.TIME_LIMIT) {
+
+            for (String instID : DataInstance.getInstIds()) {
+                System.out.println("Inst ID: " + instID + " stats: ");
+                    // parse used cols
+                Set<ColumnWithTiming> instColSet = initColList.get(instID);
+                List<ColumnWithTiming> usedCols = new ArrayList<>();
+
+                for (ColumnWithTiming columnWithTiming : instColSet) {
+                    if (varMap.get(instID).get(columnWithTiming).get(GRB.DoubleAttr.X) > 0.5)
+                        usedCols.add(columnWithTiming);
+                }
+                    System.out.println("Max tardiness: " + usedCols.stream().mapToDouble(ColumnWithTiming::getCost).sum());
+                    double tardiness = usedCols.stream().mapToDouble(ColumnWithTiming::getCost).sum();
+                    System.out.println("Used vehicles: " + usedCols.size());
+                    System.out.println("Tardiness: " + tardiness);
+
+                }
+
+                System.out.println("Obj val: " + model.get(GRB.DoubleAttr.ObjVal));
+                System.out.println("Opt gap: " + model.get(GRB.DoubleAttr.MIPGap));
+                System.out.println("Done. Total time spend : " + getTimeTillNow());
             }
 
 
         } catch (GRBException e) {
             e.printStackTrace();
         }
-
-
-        // parse the solution
-
     }
+
+
 
     @Override
     public long getTimeTillNow() {
@@ -150,14 +196,14 @@ public class MultipleColumnGenerationFacility implements Algorithm {
             // test cover constraints
             for (int tid : DataInstance.getInstance(instID).getTidList()) {
                 testCoverConstrs.get(instID).put(tid, model.addConstr(
-                        new GRBLinExpr(), GRB.GREATER_EQUAL, 1.0, "cover test " + tid));
+                        new GRBLinExpr(), GRB.GREATER_EQUAL, 1.0, null));
             }
 
             // vehicle capacity constraints
             for (int release : DataInstance.getInstance(instID).getVehicleReleaseList()) {
                 vehicleCapConstrs.get(instID).put(release, model.addConstr(
                         new GRBLinExpr(), GRB.LESS_EQUAL, DataInstance.getInstance(instID).numVehiclesByRelease(release),
-                        "vehicle capacity " + release
+                        null
                 ));
             }
         }

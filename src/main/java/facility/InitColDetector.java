@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
  * University of Michigan
  * Academic use only
  */
-public class InitColDetector {
+public class InitColDetector implements WarmupAlgorithm{
     private final String instID;
     private List<Column> allColList;
 
@@ -35,6 +35,7 @@ public class InitColDetector {
         this.allColList.addAll(allColList);
     }
 
+    @Override
     public List<ColumnWithTiming> getInitSol() {
 
         try {

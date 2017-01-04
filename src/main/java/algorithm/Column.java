@@ -15,6 +15,11 @@ public class Column {
     protected double cost;
     protected final List<Integer> seq;
     protected final int release;
+
+    public String getInstID() {
+        return instID;
+    }
+
     protected final String instID;
 
     public Column(List<Integer> seq, int release) {
@@ -93,4 +98,5 @@ public class Column {
         result = 31 * result + release;
         return result;
     }
+
 }
