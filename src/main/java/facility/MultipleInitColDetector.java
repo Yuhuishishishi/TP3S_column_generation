@@ -10,6 +10,7 @@ import ilog.concert.IloException;
 import ilog.concert.IloIntervalVar;
 import ilog.concert.IloNumExpr;
 import ilog.cp.IloCP;
+import ilog.cp.IloSearchPhase;
 import utils.Global;
 
 import java.util.ArrayList;
@@ -64,13 +65,15 @@ public class MultipleInitColDetector implements WarmupAlgorithm {
             }
 
 //            model.getEnv().set(GRB.IntParam.OutputFlag, 0);
+            model.getEnv().set(GRB.DoubleParam.MIPGap, 0.01);
             model.getEnv().set(GRB.DoubleParam.TimeLimit, 300);
 
             // solve the model
             model.optimize();
             List<Column> usedCol = new ArrayList<>();
-            if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL
-                    || model.get(GRB.IntAttr.Status)==GRB.TIME_LIMIT) {
+            int status = model.get(GRB.IntAttr.Status);
+            if (status == GRB.OPTIMAL
+                    || status==GRB.TIME_LIMIT) {
                 // get used cols
                 for (Column col : columnList) {
                     GRBVar var = varMap.get(col);
@@ -172,6 +175,14 @@ public class MultipleInitColDetector implements WarmupAlgorithm {
         IloNumExpr obj = model.numExpr();
         for (IloNumExpr tardiness : tardinessList)
             obj = model.sum(obj, tardiness);
+//        model.addMinimize(obj);
+
+        // search for tat first
+
+        List<IloIntervalVar> tatVars = new ArrayList<>();
+        tat.values().forEach(map->tatVars.addAll(map.values()));
+        IloSearchPhase selectTat = model.searchPhase(tatVars.toArray(new IloIntervalVar[tatVars.size()]));
+        model.setSearchPhases(selectTat);
 
         Map<String, List<ColumnWithTiming>> result = new HashMap<>();
         if (model.solve()) {

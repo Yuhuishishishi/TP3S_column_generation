@@ -7,6 +7,7 @@ import algorithm.pricer.PricerFacility;
 import algorithm.pricer.SequenceThenTimePricerFacility;
 import data.DataInstance;
 import facility.ColumnWithTiming;
+import facility.LastIterationSolverCP;
 import facility.MultipleInitColDetector;
 import facility.WarmupAlgorithm;
 import gurobi.*;
@@ -134,6 +135,20 @@ public class MultipleColumnGenerationFacility implements Algorithm {
             System.out.println("Number of iterations: " + iterTimes);
             System.out.println("Number of columns generated: " + (varMap.values().stream()
                     .mapToInt(Map::size).sum()-initColSize));
+
+            // end of column generation loop
+
+            // solve the last iteration integer programming problem
+            List<ColumnWithTiming> allCols = new ArrayList<>();
+            initColList.values().forEach(allCols::addAll);
+            LastIterationSolverCP lastIterationSolverCP = new
+                    LastIterationSolverCP(allCols);
+            lastIterationSolverCP.solve();
+
+
+
+
+
 
             // solve the integer version
             for (Map<ColumnWithTiming, GRBVar> columnWithTimingGRBVarMap : varMap.values()) {
