@@ -23,11 +23,13 @@ public class Column {
     protected final String instID;
 
     public Column(List<Integer> seq, int release) {
+
+        instID = DataInstance.getInstance().getInstID();
+
         this.seq = seq;
         this.release = release;
         this.cost = this.calacCost();
 
-        instID = DataInstance.getInstance().getInstID();
     }
 
     public Column(String instID, List<Integer> seq, int release) {

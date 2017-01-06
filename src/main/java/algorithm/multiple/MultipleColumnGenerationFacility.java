@@ -130,6 +130,44 @@ public class MultipleColumnGenerationFacility implements Algorithm {
                     break;//
             }
 
+            // do the last pricing
+            Map<Integer, Double> dayDual = new HashMap<>();
+
+            for (int d : resourceCapConstrs.keySet()) {
+                GRBConstr constr = resourceCapConstrs.get(d);
+                dayDual.put(d, constr.get(GRB.DoubleAttr.Pi));
+            }
+            for (String instID : DataInstance.getInstIds()) {
+//                Map<Integer, Double> testDual, vehicleDual;
+//                testDual = new HashMap<>();
+//                vehicleDual = new HashMap<>();
+//                for (int tid : testCoverConstrs.get(instID).keySet()) {
+//                    GRBConstr constr = testCoverConstrs.get(instID).get(tid);
+//                    testDual.put(tid, constr.get(GRB.DoubleAttr.Pi));
+//                }
+//                for (int release : vehicleCapConstrs.get(instID).keySet()) {
+//                    GRBConstr constr = vehicleCapConstrs.get(instID).get(release);
+//                    vehicleDual.put(release, constr.get(GRB.DoubleAttr.Pi));
+//                }
+//
+//                // pricing for the single program
+                SequenceThenTimePricerFacility pricer = (SequenceThenTimePricerFacility) instPricers.get(instID);
+//                List<ColumnWithTiming> candidates = pricer.price(testDual, vehicleDual, dayDual);
+//                for (ColumnWithTiming candidate : candidates) {
+//                    if (initColList.get(instID).add(candidate))
+//                        addOneCol(model, candidate, instID);
+//                }
+
+                Set<ColumnWithTiming> colList = initColList.get(instID);
+                List<ColumnWithTiming> newColsToAdd = new ArrayList<>();
+                colList.forEach(col->newColsToAdd.addAll(pricer.createMultipleVehicleVersion(col, dayDual)));
+                for (ColumnWithTiming columnWithTiming : newColsToAdd) {
+                    if (colList.add(columnWithTiming))
+                        addOneCol(model, columnWithTiming, instID);
+                }
+            }
+
+
             System.out.println();
             System.out.println("Relaxation obj val: " + relaxObjVal);
             System.out.println("Number of iterations: " + iterTimes);
@@ -139,14 +177,15 @@ public class MultipleColumnGenerationFacility implements Algorithm {
             // end of column generation loop
 
             // solve the last iteration integer programming problem
-            List<ColumnWithTiming> allCols = new ArrayList<>();
-            initColList.values().forEach(allCols::addAll);
-            LastIterationSolverCP lastIterationSolverCP = new
-                    LastIterationSolverCP(allCols);
-            lastIterationSolverCP.solve();
+//            List<ColumnWithTiming> allCols = new ArrayList<>();
+//            initColList.values().forEach(allCols::addAll);
+//            LastIterationSolverCP lastIterationSolverCP = new
+//                    LastIterationSolverCP(allCols);
+//            lastIterationSolverCP.solve();
 
 
 
+            // create multiple versions of the columns
 
 
 

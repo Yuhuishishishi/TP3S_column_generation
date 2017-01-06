@@ -167,6 +167,20 @@ public class ColumnGenerationFacility implements Algorithm {
             }
 
             // generate other timed versions of columns
+            Map<Integer, Double> dayDual = new HashMap<>();
+
+            for (int d : resourceCapConstrs.keySet()) {
+                GRBConstr constr = resourceCapConstrs.get(d);
+                dayDual.put(d, constr.get(GRB.DoubleAttr.Pi));
+            }
+            SequenceThenTimePricerFacility pricerFacility = (SequenceThenTimePricerFacility) pricer;
+
+            List<ColumnWithTiming> newColsToAdd = new ArrayList<>();
+            colList.forEach(col->newColsToAdd.addAll(pricerFacility.createMultipleVehicleVersion(col, dayDual)));
+            for (ColumnWithTiming columnWithTiming : newColsToAdd) {
+                if (colList.add(columnWithTiming))
+                    addOneCol(model, columnWithTiming, GRB.BINARY);
+            }
 //            List<ColumnWithTiming> additonalTimedCols = new ArrayList<>();
 //            colList.forEach(col->{
 //                List<ColumnWithTiming> colsToAdd = CPOPricerFacility.createMultipleVersion(col);
