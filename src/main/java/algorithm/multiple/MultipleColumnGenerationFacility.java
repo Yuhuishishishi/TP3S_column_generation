@@ -7,8 +7,6 @@ import algorithm.pricer.PricerFacility;
 import algorithm.pricer.SequenceThenTimePricerFacility;
 import data.DataInstance;
 import facility.ColumnWithTiming;
-import facility.LastIterationSolverCP;
-import facility.MultipleInitColDetector;
 import facility.WarmupAlgorithm;
 import gurobi.*;
 import utils.Global;

@@ -21,7 +21,7 @@ public class RunMultipleColGen {
 
         String out = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\logs\\multiple\\small_small\\";
 
-//        run(small_small, out);
+        run(small_small, out);
 
         String small_moderate = "C:\\Users\\yuhuishi\\PycharmProjects\\instance_generator\\instance\\multiple\\small_moderate";
         out = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\logs\\multiple\\small_moderate\\";

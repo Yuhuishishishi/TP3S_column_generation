@@ -1,9 +1,11 @@
-package facility;
+package algorithm.multiple;
 
 import algorithm.Column;
 import algorithm.ColumnGeneration;
 import data.DataInstance;
 import data.TestRequest;
+import facility.ColumnWithTiming;
+import facility.WarmupAlgorithm;
 import gurobi.*;
 import ilog.concert.IloCumulFunctionExpr;
 import ilog.concert.IloException;

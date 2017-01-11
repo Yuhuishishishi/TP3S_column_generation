@@ -15,7 +15,7 @@ public class MultipleInstTest {
 
     @Before
     public void readData() {
-        final String filePath = "C:\\Users\\yuhuishi\\PycharmProjects\\instance_generator\\instance\\multiple\\small_moderate\\s77_m49.tp3s";
+        final String filePath = "C:\\Users\\yuhuishi\\PycharmProjects\\instance_generator\\instance\\multiple\\moderate_moderate\\m45_m49_overlap_1.0.tp3s";
         Reader reader = new Reader(filePath);
         DataInstance.init(reader);
     }

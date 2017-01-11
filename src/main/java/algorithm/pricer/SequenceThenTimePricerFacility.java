@@ -21,17 +21,22 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
     private String instID;
     private double lastReducedCost;
     private List<List<Integer>> seqPool;
+    private int offset;
 
     public SequenceThenTimePricerFacility(String instID) {
         this.instID = instID;
         this.lastReducedCost = Double.MAX_VALUE;
         initSeqPool();
+
+        offset = DataInstance.getInstance(instID).getHorizonStart();
     }
 
     public SequenceThenTimePricerFacility() {
         this.instID = DataInstance.getInstance().getInstID();
         this.lastReducedCost = Double.MAX_VALUE;
         initSeqPool();
+
+        offset = DataInstance.getInstance(instID).getHorizonStart();
     }
 
     @Override
@@ -146,16 +151,33 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
 
         final int numHorizon = DataInstance.getInstance(instID).getHorizonEnd()
                 -DataInstance.getInstance(instID).getHorizonStart();
+        double partialReducedCost = 0;
 
-        if (valueFunction[0][vehicleRelease] > 9*numHorizon) // infeasible
+            partialReducedCost = valueFunction[0][vehicleRelease - offset] - vehicleDual.get(vehicleRelease);
+
+
+
+        if (valueFunction[0][vehicleRelease - offset] > 9*numHorizon) // infeasible
             return null;
 
         Map<Integer, Integer> startTime = new HashMap<>();
         for (int i = 1; i < result.length; i++) {
-            startTime.put(seq.get(i-1), result[i]);
+            startTime.put(seq.get(i-1), result[i] + offset);
         }
 
-        return new ColumnWithTiming(instID, seq, vehicleRelease, startTime);
+        ColumnWithTiming bestCol = new ColumnWithTiming(instID, seq, vehicleRelease, startTime);
+        double partialReducedCostTheory = bestCol.getCost() - vehicleDual.get(bestCol.getRelease()) - bestCol.daysHasCrash()
+                .stream().mapToDouble(dayDual::get).sum();
+        try {
+            assert Math.abs(partialReducedCost - partialReducedCostTheory) < 0.01;
+        } catch (AssertionError err) {
+            System.err.println("reduced cost mismatching");
+//            System.out.println("partialReducedCostTheory = " + partialReducedCostTheory);
+//            System.out.println("partialReducedCost = " + partialReducedCost);
+//            System.out.println("Difference: " + (partialReducedCostTheory - partialReducedCost));
+        }
+
+        return bestCol;
 
     }
 
@@ -177,16 +199,16 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
             for (int d = numHorizon - 1; d >= 0; d--) {
                 if (d + durCum > numHorizon)
                     valueFunction[i][d] = (double) numHorizon*10;
-                else if (d < test.getRelease())
+                else if (d < test.getRelease() - offset)
                     valueFunction[i][d] = (double) numHorizon*10;
                 else {
-                    int tardiness = Math.max(d + test.getDur() - test.getDeadline(), 0);
+                    int tardiness = Math.max(d  + test.getDur() - test.getDeadline() + offset, 0);
                     double resourceCost = 0;
-                    int tatStart = d + test.getPrep();
-                    int tatEnd = d + test.getPrep() + test.getTat();
+                    int tatStart = d  + test.getPrep();
+                    int tatEnd = d  + test.getPrep() + test.getTat();
                     for (int j = tatStart; j < tatEnd; j++) {
-                        assert dayDual.containsKey(j);
-                        resourceCost += dayDual.get(j);
+                        assert dayDual.containsKey(j + offset);
+                        resourceCost += dayDual.get(j + offset);
                     }
 
                     if (i == numTest - 1)
@@ -209,12 +231,12 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         // which vehicle to pair
         int[] result = new int[seq.size() + 1];
         Optional<Integer> bestRelease = vehicleDual.keySet().stream()
-                .reduce((r1, r2) -> -vehicleDual.get(r1) + valueFunction[0][r1] < -vehicleDual.get(r2) + valueFunction[0][r2] ?
+                .reduce((r1, r2) -> -vehicleDual.get(r1) + valueFunction[0][r1-offset] < -vehicleDual.get(r2) + valueFunction[0][r2-offset] ?
                         r1 : r2);
         assert bestRelease.isPresent();
         result[0] = bestRelease.get();
 
-        int searchStart = result[0];
+        int searchStart = result[0] - offset;
 //        for (int i = 0; i < seq.size(); i++) {
 //            double target = valueFunction[i][searchStart];
 //            TestRequest test = tests.get(i);
@@ -256,13 +278,13 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
             double target = valueFunction[i][searchStart];
             TestRequest test = tests.get(i);
             for (int d = searchStart; d < numHorizon - test.getDur(); d++) {
-                int tardiness = Math.max(d + test.getDur() - test.getDeadline(), 0);
+                int tardiness = Math.max(d  + test.getDur() - test.getDeadline() + offset, 0);
                 double resourceCost = 0;
-                int tatStart = d + test.getPrep();
-                int tatEnd = d + test.getPrep() + test.getTat();
+                int tatStart = d  + test.getPrep();
+                int tatEnd = d  + test.getPrep() + test.getTat();
                 for (int j = tatStart; j < tatEnd; j++) {
-                    assert dayDual.containsKey(j);
-                    resourceCost += dayDual.get(j);
+                    assert dayDual.containsKey(j + offset);
+                    resourceCost += dayDual.get(j + offset);
                 }
                 if ((i != seq.size() - 1 && tardiness - resourceCost + valueFunction[i + 1][d + test.getDur()] == target)
                         || (i == seq.size() - 1 && tardiness - resourceCost == target)) {
@@ -282,7 +304,7 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
 
         return DataInstance.getInstance(instID).getVehicleReleaseList().stream()
                 .map(release->{
-                    int[] timeResult = bestTimeGivenSeqAndVehicle(seq, dayDual, valueFunc, release);
+                    int[] timeResult = bestTimeGivenSeqAndVehicle(seq, dayDual, valueFunc, release-offset);
                     Map<Integer, Integer> startTime = new HashMap<>();
                     assert timeResult.length==seq.size();
                     for (int i = 0; i < timeResult.length; i++) {
