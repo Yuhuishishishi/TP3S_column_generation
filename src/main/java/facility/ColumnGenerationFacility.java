@@ -12,6 +12,7 @@ import utils.Global;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static algorithm.ColumnGeneration.countMaxActivityPerDay;
 import static algorithm.ColumnGeneration.enumInitCol;
 
 /**
@@ -89,6 +90,10 @@ public class ColumnGenerationFacility implements Algorithm {
             PricerFacility pricer = new SequenceThenTimePricerFacility();
             System.out.printf("[%d] - Starting column generation loop ... \n", getTimeTillNow());
             double relaxObjVal = Double.MAX_VALUE;
+
+            Map<Integer, Integer> dayResourceActiveCounter = new HashMap<>();
+            resourceCapConstrs.keySet().forEach(d->dayResourceActiveCounter.put(d, 0));
+
             while (iterTimes++ < maxIter) {
                 model.optimize();
 
@@ -107,6 +112,10 @@ public class ColumnGenerationFacility implements Algorithm {
                 for (int d : resourceCapConstrs.keySet()) {
                     GRBConstr constr = resourceCapConstrs.get(d);
                     dayDual.put(d, constr.get(GRB.DoubleAttr.Pi));
+                    if (dayDual.get(d) < -0.01) {
+                        int count = dayResourceActiveCounter.get(d);
+                        dayResourceActiveCounter.put(d, ++count);
+                    }
                 }
 
                 List<ColumnWithTiming> candidates = pricer.price(testDual, vehicleDual, dayDual);
@@ -161,6 +170,8 @@ public class ColumnGenerationFacility implements Algorithm {
 //            solver.solve();
 
 
+
+
             // solve the integer version
             for (GRBVar var : varMap.values()) {
                 var.set(GRB.CharAttr.VType, GRB.BINARY);
@@ -196,11 +207,43 @@ public class ColumnGenerationFacility implements Algorithm {
 //                }
 //            });
 
+            // set all capacity constraints as lazy
+            resourceCapConstrs.values().forEach(constr -> {
+                try {
+                    constr.set(GRB.IntAttr.Lazy, 3);
+                } catch (GRBException e) {
+                    e.printStackTrace();
+                }
+            });
+
+//             set all inactive one as lazy
+            dayResourceActiveCounter.entrySet().stream().filter(e->e.getValue()<=0.1)
+                    .map(e->resourceCapConstrs.get(e.getKey()))
+                    .forEach(constr -> {
+                        try {
+                            constr.set(GRB.IntAttr.Lazy, 1);
+                        } catch (GRBException e) {
+                            e.printStackTrace();
+                        }
+                    });
+
+
+            model.update();
+
+            model.getEnv().set(GRB.IntParam.OutputFlag, 1);
+
+
+//            model.getEnv().set(GRB.DoubleParam.TuneTimeLimit, 12000);
+//            model.tune();
+//            model.write("C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\tuned.prm");
+
             System.out.printf("[%d] - Solving last iteration integer formulation ... \n", getTimeTillNow());
             model.update();
-            model.getEnv().set(GRB.IntParam.OutputFlag, 1);
 //            model.getEnv().set(GRB.DoubleParam.MIPGap, 0.01); // optimality termination gap
-            model.getEnv().set(GRB.DoubleParam.TimeLimit, 300); // time limit
+            model.getEnv().set(GRB.DoubleParam.TimeLimit, 600); // time limit
+            model.getEnv().set(GRB.IntParam.MIPFocus, 1); // finding feasible solution first
+            model.getEnv().set(GRB.IntParam.Presolve, 2); // more aggresive presolve
+            model.getEnv().set(GRB.DoubleParam.Heuristics, 0.1); // more heuristic investment
 
             model.optimize();
 
@@ -214,6 +257,21 @@ public class ColumnGenerationFacility implements Algorithm {
                 System.out.println("Obj val: " + model.get(GRB.DoubleAttr.ObjVal));
 
                 System.out.println("Opt gap: " + model.get(GRB.DoubleAttr.MIPGap));
+
+                // count the max activities
+                Map<Integer, Integer> counter = new HashMap<>();
+                dayResourceActiveCounter.keySet().forEach(d->counter.put(d, 0));
+                usedCols.stream().forEach(col->col.daysHasCrash().forEach(d->{
+                    int count = counter.get(d);
+                    counter.put(d, ++count);
+                }));
+                OptionalInt maxAct = counter.values().stream().mapToInt(e -> e).max();
+                assert maxAct.isPresent();
+                try {
+                    assert maxAct.getAsInt() <= Global.FACILITY_CAP;
+                } catch (AssertionError err) {
+                    System.out.println("maxAct = " + maxAct);
+                }
             }
 
             System.out.println("Done. Total time spend : " + getTimeTillNow());

@@ -75,6 +75,10 @@ public class MultipleColumnGenerationFacility implements Algorithm {
             // initialize the pricer
             Map<String, PricerFacility> instPricers = new HashMap<>();
             DataInstance.getInstIds().forEach(instID -> instPricers.put(instID, new SequenceThenTimePricerFacility(instID)));
+
+            Map<Integer, Integer> dayActiveCounter = new HashMap<>();
+            resourceCapConstrs.keySet().forEach(d->dayActiveCounter.put(d, 0));
+
             while (iterTimes++ < maxIter) {
                 boolean noNewCols = true;
                 model.optimize();
@@ -90,6 +94,11 @@ public class MultipleColumnGenerationFacility implements Algorithm {
                 for (int d : resourceCapConstrs.keySet()) {
                     GRBConstr constr = resourceCapConstrs.get(d);
                     dayDual.put(d, constr.get(GRB.DoubleAttr.Pi));
+
+                    if (dayDual.get(d) < -0.01) {
+                        int activeCount = dayActiveCounter.get(d);
+                        dayActiveCounter.put(d, ++activeCount);
+                    }
                 }
 
                 for (String instID : DataInstance.getInstIds()) {
@@ -183,8 +192,26 @@ public class MultipleColumnGenerationFacility implements Algorithm {
 
 
 
-            // create multiple versions of the columns
+            // covert day capacity to lazy
+            // set all capacity constraints as lazy
+            resourceCapConstrs.values().forEach(constr -> {
+                try {
+                    constr.set(GRB.IntAttr.Lazy, 3);
+                } catch (GRBException e) {
+                    e.printStackTrace();
+                }
+            });
 
+//             set all inactive one as lazy
+            dayActiveCounter.entrySet().stream().filter(e->e.getValue()<=0.1)
+                    .map(e->resourceCapConstrs.get(e.getKey()))
+                    .forEach(constr -> {
+                        try {
+                            constr.set(GRB.IntAttr.Lazy, 1);
+                        } catch (GRBException e) {
+                            e.printStackTrace();
+                        }
+                    });
 
 
             // solve the integer version
