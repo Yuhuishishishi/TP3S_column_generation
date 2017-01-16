@@ -2,7 +2,6 @@ package facility;
 
 import algorithm.Algorithm;
 import algorithm.Column;
-import algorithm.pricer.CPOPricerFacility;
 import algorithm.pricer.PricerFacility;
 import algorithm.pricer.SequenceThenTimePricerFacility;
 import data.DataInstance;
@@ -12,7 +11,6 @@ import utils.Global;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static algorithm.ColumnGeneration.countMaxActivityPerDay;
 import static algorithm.ColumnGeneration.enumInitCol;
 
 /**
@@ -68,6 +66,16 @@ public class ColumnGenerationFacility implements Algorithm {
 
         final int initColSize = colList.size();
 
+        // compute the horizon length
+        OptionalInt horizonEnd = colList.stream().flatMap(col -> col.daysHasCrash().stream())
+                .mapToInt(d -> d).max();
+        assert horizonEnd.isPresent();
+        if (horizonEnd.getAsInt() > DataInstance.getInstance().getHorizonEnd()) {
+            System.out.println("Updating horzion end from " + DataInstance.getInstance().getHorizonEnd()
+            + " to " + horizonEnd);
+            DataInstance.getInstance().setHorizonEnd((int) (horizonEnd.getAsInt() + 1));
+        }
+
         try {
             GRBEnv env = new GRBEnv();
             GRBModel model = buildModel(env, colList);
@@ -94,13 +102,18 @@ public class ColumnGenerationFacility implements Algorithm {
             Map<Integer, Integer> dayResourceActiveCounter = new HashMap<>();
             resourceCapConstrs.keySet().forEach(d->dayResourceActiveCounter.put(d, 0));
 
+            Map<Integer, Double> testDual = new HashMap<>();
+            Map<Integer, Double> vehicleDual = new HashMap<>();
+            Map<Integer, Double> dayDual = new HashMap<>();
+
             while (iterTimes++ < maxIter) {
                 model.optimize();
 
                 // get dual information
-                Map<Integer, Double> testDual = new HashMap<>();
-                Map<Integer, Double> vehicleDual = new HashMap<>();
-                Map<Integer, Double> dayDual = new HashMap<>();
+                testDual.clear();
+                vehicleDual.clear();
+                dayDual.clear();
+
                 for (int tid : testCoverConstrs.keySet()) {
                     GRBConstr constr = testCoverConstrs.get(tid);
                     testDual.put(tid, constr.get(GRB.DoubleAttr.Pi));
@@ -129,6 +142,7 @@ public class ColumnGenerationFacility implements Algorithm {
                 // add the column to master problem
                 int realColNum = 0;
                 for (ColumnWithTiming col : candidates) {
+                    assert col.isValid();
                     if (uniqColSet.add(col)) {
                         addOneCol(model, col, GRB.CONTINUOUS);
                         colList.add(col);
@@ -156,20 +170,28 @@ public class ColumnGenerationFacility implements Algorithm {
             System.out.println("Number of columns generated: " + (colList.size()-initColSize));
 
 
+            List<ColumnWithTiming> heuristicSol = ((SequenceThenTimePricerFacility) pricer).primalHeuristic(
+                    testDual, vehicleDual, dayDual
+            );
+
             pricer.end();
 
-            // extract the sequence information
-            Set<Column> useFulColSet = new HashSet<>();
-            for (ColumnWithTiming columnWithTiming : colList) {
-                    useFulColSet.add(new Column(columnWithTiming.getSeq(), columnWithTiming.getRelease()));
+            assert colList.size()==varMap.size();
+
+            // add the heuristic solution to the model
+            for (ColumnWithTiming col : heuristicSol) {
+                GRBVar var;
+
+                Column colwithoutTime = new Column(col.getSeq(), col.getRelease());
+                assert colwithoutTime.getCost() <= col.getCost();
+                if (uniqColSet.add(col)) {
+                    var = addOneCol(model, col, GRB.BINARY);
+                    colList.add(col);
+                }
+                else
+                    var = varMap.get(col);
+                var.set(GRB.DoubleAttr.Start, 1.0);
             }
-
-            System.out.println("Done with extracting sequence information");
-
-//            LastIterationSolver solver = new LastIterationSolver(new ArrayList<>(useFulColSet));
-//            solver.solve();
-
-
 
 
             // solve the integer version
@@ -178,20 +200,25 @@ public class ColumnGenerationFacility implements Algorithm {
             }
 
             // generate other timed versions of columns
-            Map<Integer, Double> dayDual = new HashMap<>();
-
-            for (int d : resourceCapConstrs.keySet()) {
-                GRBConstr constr = resourceCapConstrs.get(d);
-                dayDual.put(d, constr.get(GRB.DoubleAttr.Pi));
-            }
             SequenceThenTimePricerFacility pricerFacility = (SequenceThenTimePricerFacility) pricer;
 
             List<ColumnWithTiming> newColsToAdd = new ArrayList<>();
             colList.forEach(col->newColsToAdd.addAll(pricerFacility.createMultipleVehicleVersion(col, dayDual)));
+            int newColCounter = 0;
             for (ColumnWithTiming columnWithTiming : newColsToAdd) {
-                if (colList.add(columnWithTiming))
+
+                if (!columnWithTiming.isValid()) {
+//                    System.out.println("Detect invalid columns");
+                    continue;
+                }
+
+                if (uniqColSet.add(columnWithTiming)) {
                     addOneCol(model, columnWithTiming, GRB.BINARY);
+                    colList.add(columnWithTiming);
+                    newColCounter++;
+                }
             }
+            System.out.println(newColCounter + " more columns added");
 //            List<ColumnWithTiming> additonalTimedCols = new ArrayList<>();
 //            colList.forEach(col->{
 //                List<ColumnWithTiming> colsToAdd = CPOPricerFacility.createMultipleVersion(col);
@@ -215,8 +242,8 @@ public class ColumnGenerationFacility implements Algorithm {
                     e.printStackTrace();
                 }
             });
-
-//             set all inactive one as lazy
+//
+////             set all inactive one as lazy
             dayResourceActiveCounter.entrySet().stream().filter(e->e.getValue()<=0.1)
                     .map(e->resourceCapConstrs.get(e.getKey()))
                     .forEach(constr -> {
@@ -240,7 +267,7 @@ public class ColumnGenerationFacility implements Algorithm {
             System.out.printf("[%d] - Solving last iteration integer formulation ... \n", getTimeTillNow());
             model.update();
 //            model.getEnv().set(GRB.DoubleParam.MIPGap, 0.01); // optimality termination gap
-            model.getEnv().set(GRB.DoubleParam.TimeLimit, 600); // time limit
+            model.getEnv().set(GRB.DoubleParam.TimeLimit, 900); // time limit
             model.getEnv().set(GRB.IntParam.MIPFocus, 1); // finding feasible solution first
             model.getEnv().set(GRB.IntParam.Presolve, 2); // more aggresive presolve
             model.getEnv().set(GRB.DoubleParam.Heuristics, 0.1); // more heuristic investment
@@ -249,7 +276,14 @@ public class ColumnGenerationFacility implements Algorithm {
 
             if (model.get(GRB.IntAttr.Status) == GRB.OPTIMAL
                     || model.get(GRB.IntAttr.Status)==GRB.TIME_LIMIT) {
-                List<ColumnWithTiming> usedCols = parseSol(colList);
+                List<ColumnWithTiming> usedCols = parseSol(new ArrayList<>(varMap.keySet()));
+
+                // check test covering
+                Map<Integer, Boolean> testCovered = new HashMap<>();
+                DataInstance.getInstance().getTidList().forEach(tid->testCovered.put(tid, false));
+                usedCols.stream().flatMap(col->col.getSeq().stream()).forEach(tid->testCovered.put(tid, true));
+                assert !testCovered.values().contains(false);
+
                 System.out.println("Max tardiness: " + usedCols.stream().mapToDouble(ColumnWithTiming::getCost).sum());
                 double tardiness = model.get(GRB.DoubleAttr.ObjVal) - usedCols.size()*Global.VEHICLE_COST;
                 System.out.println("Used vehicles: " + usedCols.size());
@@ -330,6 +364,7 @@ public class ColumnGenerationFacility implements Algorithm {
 
         model.update();
 
+
         // add variables
 
         for (ColumnWithTiming col : colList) {
@@ -340,7 +375,7 @@ public class ColumnGenerationFacility implements Algorithm {
         return model;
     }
 
-    private void addOneCol(GRBModel model, ColumnWithTiming col, char vtype) throws GRBException {
+    private GRBVar addOneCol(GRBModel model, ColumnWithTiming col, char vtype) throws GRBException {
         GRBColumn grbColumn = new GRBColumn();
         GRBConstr vConstr = vehicleCapConstrs.get(col.getRelease());
         grbColumn.addTerm(1, vConstr);
@@ -356,6 +391,7 @@ public class ColumnGenerationFacility implements Algorithm {
                     GRB.CONTINUOUS, grbColumn, null);
 
         varMap.put(col, v);
+        return v;
     }
 
 

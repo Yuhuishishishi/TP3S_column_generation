@@ -121,22 +121,6 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
     private double colReducedCost(List<Integer> seq,
                                   Map<Integer, Double> testDual, Map<Integer, Double> vehicleDual, Map<Integer, Double> dayDual
     ) {
-        // calculate the best reduced cost
-        // decision - vehicle release day selection
-        //          - time for different tests
-//        double reducedCost = Global.VEHICLE_COST;
-//        double[][] valueFunction = optimalTimeFinding(seq, dayDual);
-//        // test composition
-//        for (Integer aSeq : seq) {
-//            reducedCost -= testDual.get(aSeq);
-//        }
-//        // find the smallest vehicle
-//        OptionalDouble minVehicleResourceCost = vehicleDual.keySet().stream()
-//                .mapToDouble(release -> -vehicleDual.get(release) + valueFunction[0][release])
-//                .min();
-//        assert minVehicleResourceCost.isPresent();
-//        reducedCost += minVehicleResourceCost.getAsDouble();
-//        return reducedCost;
         return CPOPricerFacility.reducedCost(bestTimedColGivenSeq(seq, vehicleDual, dayDual),
                 testDual, vehicleDual, dayDual);
 
@@ -237,26 +221,6 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
         result[0] = bestRelease.get();
 
         int searchStart = result[0] - offset;
-//        for (int i = 0; i < seq.size(); i++) {
-//            double target = valueFunction[i][searchStart];
-//            TestRequest test = tests.get(i);
-//            for (int d = searchStart; d < numHorizon - test.getDur(); d++) {
-//                int tardiness = Math.max(d + test.getDur() - test.getDeadline(), 0);
-//                double resourceCost = 0;
-//                int tatStart = d + test.getPrep();
-//                int tatEnd = d + test.getPrep() + test.getTat();
-//                for (int j = tatStart; j < tatEnd; j++) {
-//                    assert dayDual.containsKey(j);
-//                    resourceCost += dayDual.get(j);
-//                }
-//                if ((i != seq.size() - 1 && tardiness - resourceCost + valueFunction[i + 1][d + test.getDur()] == target)
-//                        || (i == seq.size() - 1 && tardiness - resourceCost == target)) {
-//                    result[i + 1] = d;
-//                    searchStart = d + test.getDur();
-//                    break;
-//                }
-//            }
-//        }
         int[] timeResult = bestTimeGivenSeqAndVehicle(seq, dayDual, valueFunction, searchStart);
         System.arraycopy(timeResult, 0, result, 1, timeResult.length);
 
@@ -267,6 +231,8 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
                                              final Map<Integer, Double> dayDual,
                                              final double[][] valueFunction,
                                              int searchStart) {
+
+
         int[] result = new int[seq.size()];
         List<TestRequest> tests = seq.stream().map(tid -> DataInstance.getInstance(instID).getTestById(tid))
                 .collect(Collectors.toList());
@@ -299,10 +265,15 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
 
     public List<ColumnWithTiming> createMultipleVehicleVersion(ColumnWithTiming col,
                                                                Map<Integer, Double> dayDual) {
+
+        //TODO: this function is problematic
         List<Integer> seq = col.getSeq();
         double[][] valueFunc = optimalTimeFinding(seq, dayDual);
 
         return DataInstance.getInstance(instID).getVehicleReleaseList().stream()
+                .filter(release->DataInstance.getInstance(instID).getTestById(
+                        col.getSeq().get(0)
+                ).getRelease()<=release)
                 .map(release->{
                     int[] timeResult = bestTimeGivenSeqAndVehicle(seq, dayDual, valueFunc, release-offset);
                     Map<Integer, Integer> startTime = new HashMap<>();
@@ -314,24 +285,6 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
                 }).collect(Collectors.toList());
     }
 
-    public List<ColumnWithTiming> primalHeuristic(Map<Integer, Double> testDual,
-                                                  Map<Integer, Double> vehicleDual,
-                                                  Map<Integer, Double> dayDual) {
-        // solve for a feasible integer solution using heuristics
-        Map<Integer, Boolean> testCovered = new HashMap<>();
-        Map<Integer, Integer> vehicleCapacity = new HashMap<>();
-        Map<Integer, Integer> resourceRemaining = new HashMap<>();
-
-        DataInstance inst = DataInstance.getInstance(instID);
-        testDual.keySet().forEach(tid->testCovered.put(tid, false));
-        vehicleDual.keySet().forEach(release->vehicleCapacity.put(release, inst.numVehiclesByRelease(release)));
-        dayDual.keySet().forEach(day->resourceRemaining.put(day, Global.FACILITY_CAP));
-
-
-
-        return null;
-
-    }
 
     private List<ColumnWithTiming> sortCols(Map<Integer,Double> testDual,
                                             Map<Integer, Double> vehicleDual,
@@ -349,4 +302,98 @@ public class SequenceThenTimePricerFacility implements PricerFacility {
                         return 0;
                 }).collect(Collectors.toList());
     }
+
+    public List<ColumnWithTiming> primalHeuristic(Map<Integer, Double> testDual,
+                                                  Map<Integer, Double> vehicleDual,
+                                                  Map<Integer, Double> dayDual) {
+        List<ColumnWithTiming> res = new ArrayList<>();
+
+
+        // defensive copy
+        Map<Integer,Double> testDualLocal = new HashMap<>(testDual);
+        Map<Integer,Double> vehicleDualLocal = new HashMap<>(vehicleDual);
+        Map<Integer,Double> dayDualLocal = new HashMap<>(dayDual);
+
+
+        final double largetNumber = (DataInstance.getInstance(instID).getHorizonEnd()
+                - DataInstance.getInstance(instID).getHorizonStart())*10;
+
+
+        Map<Integer, Boolean> testCovered;
+        Map<Integer, Integer> vehicleRemainingCapacity, dayRemainingCapacity;
+        testCovered = new HashMap<>();
+        vehicleRemainingCapacity = new HashMap<>();
+        dayRemainingCapacity = new HashMap<>();
+
+        testDual.keySet().forEach(tid->testCovered.put(tid, false));
+        vehicleDual.keySet().forEach(release->vehicleRemainingCapacity.put(release,
+                DataInstance.getInstance(instID).numVehiclesByRelease(release)));
+        dayDual.keySet().forEach(d->dayRemainingCapacity.put(d, Global.FACILITY_CAP));
+
+        boolean isFullSchedule = !testCovered.values().contains(false);
+
+        while (!isFullSchedule) {
+            List<ColumnWithTiming> sortedCols = sortCols(testDualLocal, vehicleDualLocal, dayDualLocal);
+            boolean findImprovement = false;
+            for (ColumnWithTiming col : sortedCols) {
+                if (col == null)
+                    continue;
+                if (col.getSeq().stream().allMatch(testCovered::get))
+                    continue;
+                if (vehicleRemainingCapacity.get(col.getRelease())==0)
+                    continue;
+                if (col.daysHasCrash().stream().anyMatch(d->dayRemainingCapacity.get(d)==0))
+                    continue;
+
+                findImprovement = true;
+                res.add(col);
+                // find something
+                // update the test covered, vehicle used, days used
+                final boolean[] needUpdate = {false};
+                col.getSeq().forEach(tid->testCovered.put(tid, true));
+                final int[] count = {vehicleRemainingCapacity.get(col.getRelease())};
+                vehicleRemainingCapacity.put(col.getRelease(), --count[0]);
+                if (count[0] ==0)
+                    needUpdate[0] = true;
+                col.daysHasCrash().forEach(d->{
+                    int count2 = dayRemainingCapacity.get(d);
+                    dayRemainingCapacity.put(d, --count2);
+                    if (count2==0)
+                        needUpdate[0] = true;
+                });
+
+                // if some vehicle is used up or a day capacity is used up
+                if (needUpdate[0])
+                    break;
+            }
+
+            if (!findImprovement)
+                break;
+
+            // update the duals
+            // set all covered tests to large numbers
+            // set all vehicle cost used up to large numbers
+            // set all used capacity to large numbers
+            testCovered.keySet().stream().filter(testCovered::get)
+                    .forEach(tid->testDualLocal.put(tid, 0.0));
+            vehicleRemainingCapacity.keySet().stream().filter(release->vehicleRemainingCapacity.get(release)==0)
+                    .forEach(release->vehicleDualLocal.put(release, -largetNumber));
+            dayRemainingCapacity.keySet().stream().filter(d->dayRemainingCapacity.get(d)==0)
+                    .forEach(d->dayDualLocal.put(d, -largetNumber));
+
+
+            isFullSchedule = !testCovered.values().contains(false);
+            System.out.println("Remaining test to cover: " + testCovered.values().stream().filter(e->!e).count());
+
+
+        }
+
+        // compute the objective value of heuristic solution
+        double objVal = res.stream().mapToDouble(col->Global.VEHICLE_COST+col.getCost()).sum();
+        System.out.println("Find a heuristic solution with objval = " + objVal);
+        return res;
+
+    }
+
+
 }

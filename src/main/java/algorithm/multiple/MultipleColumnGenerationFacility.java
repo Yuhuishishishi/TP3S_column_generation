@@ -41,6 +41,119 @@ public class MultipleColumnGenerationFacility implements Algorithm {
         });
     }
 
+    private List<ColumnWithTiming> generateColsForInst(String instID, Set<ColumnWithTiming> initCols,
+                                                       Map<Integer, Integer> dayCapacity, GRBEnv env) throws GRBException {
+        System.out.println("Generating additional columns for " + instID);
+        List<ColumnWithTiming> additionalCols = new ArrayList<>();
+
+        final GRBModel model = new GRBModel(env);
+        final DataInstance instance = DataInstance.getInstance(instID);
+        final int horizonStart = instance.getHorizonStart();
+        final int horizonEnd = instance.getHorizonEnd();
+
+        final int maxIter = 10000;
+        int iterTimes = 0;
+        PricerFacility pricer = new SequenceThenTimePricerFacility(instID);
+
+        // build the model
+        // constraints
+        Map<Integer, GRBConstr> localTestCoverConstr = new HashMap<>();
+        Map<Integer, GRBConstr> localVehicleCapConstr = new HashMap<>();
+        Map<Integer, GRBConstr> localDayCap = new HashMap<>();
+
+        for (Integer tid : instance.getTidList()) {
+            localTestCoverConstr.put(tid,
+                    model.addConstr(new GRBLinExpr(), GRB.GREATER_EQUAL, 1.0, null));
+        }
+        for (Integer release : instance.getVehicleReleaseList()) {
+            localVehicleCapConstr.put(release,
+                    model.addConstr(new GRBLinExpr(), GRB.LESS_EQUAL,
+                            instance.numVehiclesByRelease(release), null));
+        }
+        for (int d = horizonStart; d < horizonEnd; d++) {
+            localDayCap.put(d,
+                    model.addConstr(new GRBLinExpr(), GRB.LESS_EQUAL,
+                            dayCapacity.get(d), null));
+            localDayCap.get(d).set(GRB.IntAttr.Lazy, 1);
+        }
+
+        model.update();
+
+        // add variables
+        Map<ColumnWithTiming, GRBVar> columnWithTimingGRBVarMap = new HashMap<>();
+        for (ColumnWithTiming col : initCols) {
+            GRBColumn grbColumn = new GRBColumn();
+            // vehicle
+            grbColumn.addTerm(1.0, localVehicleCapConstr.get(col.getRelease()));
+            // tests
+            col.getSeq().forEach(tid->grbColumn.addTerm(1.0, localTestCoverConstr.get(tid)));
+            col.daysHasCrash().forEach(d->grbColumn.addTerm(1.0, localDayCap.get(d)));
+
+            // obj func val
+
+               double  objFuncVal = Global.VEHICLE_COST + col.getCost();
+            // add the variable
+            GRBVar var = model.addVar(0, GRB.INFINITY, objFuncVal, GRB.CONTINUOUS, grbColumn, null);
+            columnWithTimingGRBVarMap.put(col, var);
+        }
+
+
+        while (iterTimes++ < maxIter) {
+            model.optimize();
+
+            // get dual information
+            Map<Integer, Double> testDual = new HashMap<>();
+            Map<Integer, Double> vehicleDual = new HashMap<>();
+            Map<Integer, Double> dayDual = new HashMap<>();
+            for (int tid : localTestCoverConstr.keySet()) {
+                GRBConstr constr = localTestCoverConstr.get(tid);
+                testDual.put(tid, constr.get(GRB.DoubleAttr.Pi));
+            }
+            for (int release : localVehicleCapConstr.keySet()) {
+                GRBConstr constr = localVehicleCapConstr.get(release);
+                vehicleDual.put(release, constr.get(GRB.DoubleAttr.Pi));
+            }
+            for (int d : localDayCap.keySet()) {
+                GRBConstr constr = resourceCapConstrs.get(d);
+                dayDual.put(d, constr.get(GRB.DoubleAttr.Pi));
+            }
+
+            List<ColumnWithTiming> candidates = pricer.price(testDual, vehicleDual, dayDual);
+            System.out.printf("Iteration: %d, Master obj: %.3f, pricing obj: %.3f, # cols: %d, ", iterTimes,
+                    model.get(GRB.DoubleAttr.ObjVal),
+                    pricer.getReducedCost(),
+                    candidates.size());
+            if (candidates.size()==0)
+                break;
+            // add the column to master problem
+            int realColNum = 0;
+            for (ColumnWithTiming col : candidates) {
+                additionalCols.add(col);
+                GRBColumn grbColumn = new GRBColumn();
+                // vehicle
+                grbColumn.addTerm(1.0, localVehicleCapConstr.get(col.getRelease()));
+                // tests
+                col.getSeq().forEach(tid->grbColumn.addTerm(1.0, localTestCoverConstr.get(tid)));
+                col.daysHasCrash().forEach(d->grbColumn.addTerm(1.0, localDayCap.get(d)));
+
+                // obj func val
+                double  objFuncVal = Global.VEHICLE_COST + col.getCost();
+                // add the variable
+                GRBVar var = model.addVar(0, GRB.INFINITY, objFuncVal, GRB.CONTINUOUS, grbColumn, null);
+                columnWithTimingGRBVarMap.put(col, var);
+                // add the variables
+                Column colWithoutTime = new Column(col.getSeq(), col.getRelease());
+                assert  colWithoutTime.getCost()<=col.getCost();
+            }
+            System.out.print("# col added: " + realColNum + "\n");
+            model.update();
+        }
+
+        System.out.println("Generated " + additionalCols.size() + " more columns. ");
+        model.dispose();
+        return additionalCols;
+    }
+
     @Override
     public void solve() {
         // enumerate initial set of columns
@@ -78,6 +191,7 @@ public class MultipleColumnGenerationFacility implements Algorithm {
 
             Map<Integer, Integer> dayActiveCounter = new HashMap<>();
             resourceCapConstrs.keySet().forEach(d->dayActiveCounter.put(d, 0));
+            Map<Integer, Double> dayDual = new HashMap<>();
 
             while (iterTimes++ < maxIter) {
                 boolean noNewCols = true;
@@ -89,7 +203,7 @@ public class MultipleColumnGenerationFacility implements Algorithm {
                 System.out.printf("Iteration: %d, Master obj: %.3f \n", iterTimes,
                         model.get(GRB.DoubleAttr.ObjVal));
 
-                Map<Integer, Double> dayDual = new HashMap<>();
+                dayDual.clear();
                 // get dual information
                 for (int d : resourceCapConstrs.keySet()) {
                     GRBConstr constr = resourceCapConstrs.get(d);
@@ -138,12 +252,10 @@ public class MultipleColumnGenerationFacility implements Algorithm {
             }
 
             // do the last pricing
-            Map<Integer, Double> dayDual = new HashMap<>();
-
-            for (int d : resourceCapConstrs.keySet()) {
-                GRBConstr constr = resourceCapConstrs.get(d);
-                dayDual.put(d, constr.get(GRB.DoubleAttr.Pi));
-            }
+//            for (int d : resourceCapConstrs.keySet()) {
+//                GRBConstr constr = resourceCapConstrs.get(d);
+//                dayDual.put(d, constr.get(GRB.DoubleAttr.Pi));
+//            }
             for (String instID : DataInstance.getInstIds()) {
 //                Map<Integer, Double> testDual, vehicleDual;
 //                testDual = new HashMap<>();
@@ -180,6 +292,9 @@ public class MultipleColumnGenerationFacility implements Algorithm {
             System.out.println("Number of iterations: " + iterTimes);
             System.out.println("Number of columns generated: " + (varMap.values().stream()
                     .mapToInt(Map::size).sum()-initColSize));
+
+            // solve the lagrangian
+            modelAndSolveLagrangian(env, initColList, dayDual);
 
             // end of column generation loop
 
@@ -252,9 +367,181 @@ public class MultipleColumnGenerationFacility implements Algorithm {
             }
 
 
+
+            model.dispose();
+            env.dispose();
+
+
         } catch (GRBException e) {
             e.printStackTrace();
         }
+    }
+
+    private void modelAndSolveLagrangian(GRBEnv env, Map<String, Set<ColumnWithTiming>> allColSet,
+                                         Map<Integer, Double> lastIterResourcePrice) throws GRBException {
+        Map<Integer, Integer> resourceUsedCounter = new HashMap<>();
+        lastIterResourcePrice.keySet().forEach(d->resourceUsedCounter.put(d, Global.FACILITY_CAP));
+
+        double objVal = 0;
+
+        // model and solve the lagrangian relaxation of the original problem
+        boolean firstInst = true;
+        boolean needResolve = false;
+        for (String instID : DataInstance.getInstIds()) {
+
+            final Set<ColumnWithTiming> usedCol = allColSet.get(instID);
+            final DataInstance instance = DataInstance.getInstance(instID);
+            final int horizonStart = instance.getHorizonStart();
+            final int horizonEnd = instance.getHorizonEnd();
+
+
+            GRBModel lag = new GRBModel(env);
+
+            // constraints
+            Map<Integer, GRBConstr> localTestCoverConstr = new HashMap<>();
+            Map<Integer, GRBConstr> localVehicleCapConstr = new HashMap<>();
+            Map<Integer, GRBConstr> localDayCap = new HashMap<>();
+
+            for (Integer tid : instance.getTidList()) {
+                localTestCoverConstr.put(tid,
+                        lag.addConstr(new GRBLinExpr(), GRB.GREATER_EQUAL, 1.0, null));
+            }
+            for (Integer release : instance.getVehicleReleaseList()) {
+                localVehicleCapConstr.put(release,
+                        lag.addConstr(new GRBLinExpr(), GRB.LESS_EQUAL,
+                                instance.numVehiclesByRelease(release), null));
+            }
+            for (int d = horizonStart; d < horizonEnd; d++) {
+                localDayCap.put(d,
+                        lag.addConstr(new GRBLinExpr(), GRB.LESS_EQUAL,
+                                resourceUsedCounter.get(d), null));
+                localDayCap.get(d).set(GRB.IntAttr.Lazy, 1);
+            }
+
+            // variables
+            Map<ColumnWithTiming, GRBVar> columnWithTimingGRBVarMap = new HashMap<>();
+            for (ColumnWithTiming col : usedCol) {
+                GRBColumn grbColumn = new GRBColumn();
+                // vehicle
+                grbColumn.addTerm(1.0, localVehicleCapConstr.get(col.getRelease()));
+                // tests
+                col.getSeq().forEach(tid->grbColumn.addTerm(1.0, localTestCoverConstr.get(tid)));
+                // obj func val
+                double objFuncVal;
+                if (firstInst) {
+                    firstInst = false;
+                    objFuncVal = Global.VEHICLE_COST + col.getCost()
+                            - col.daysHasCrash().stream().mapToDouble(lastIterResourcePrice::get).sum();
+                } else {
+                    objFuncVal = Global.VEHICLE_COST + col.getCost();
+                }
+                // add the capacity constraints
+                col.daysHasCrash().forEach(d->{
+                try {
+                    assert localDayCap.containsKey(d);
+                    grbColumn.addTerm(1.0, localDayCap.get(d));
+                } catch (AssertionError err) {
+                    System.out.println("d = " + d);
+
+                }
+                });
+                // add the variable
+                GRBVar var = lag.addVar(0, 1, objFuncVal, GRB.BINARY, grbColumn, null);
+                columnWithTimingGRBVarMap.put(col, var);
+            }
+
+            lag.update();
+
+            lag.getEnv().set(GRB.DoubleParam.TimeLimit, 150);
+            lag.optimize();
+
+            int status = lag.get(GRB.IntAttr.Status);
+            if (status==GRB.OPTIMAL || status==GRB.TIME_LIMIT) {
+                // used cols
+                List<ColumnWithTiming> colsInSol = usedCol.stream().filter(col->{
+                    try {
+                        return columnWithTimingGRBVarMap.get(col).get(GRB.DoubleAttr.X)>0.5;
+                    } catch (GRBException e) {
+                        e.printStackTrace();
+                        return false;
+                    }
+                }).collect(Collectors.toList());
+
+                // compute the objval
+                objVal += (usedCol.size()*Global.VEHICLE_COST + usedCol.stream().mapToDouble(ColumnWithTiming::getCost)
+                        .sum());
+
+                // subtract the capacity
+                colsInSol.forEach(col->col.daysHasCrash().forEach(d-> {
+                    int count = resourceUsedCounter.get(d);
+                    resourceUsedCounter.put(d, --count);
+                }));
+
+            } else {
+                // re generate columns
+                List<ColumnWithTiming> additionalCols = generateColsForInst(instID, usedCol, resourceUsedCounter, env);
+                // resolve the problem
+                // add the new columns
+                for (ColumnWithTiming col : additionalCols) {
+                    GRBColumn grbColumn = new GRBColumn();
+                    // vehicle
+                    grbColumn.addTerm(1.0, localVehicleCapConstr.get(col.getRelease()));
+                    // tests
+                    col.getSeq().forEach(tid->grbColumn.addTerm(1.0, localTestCoverConstr.get(tid)));
+                    // obj func val
+                    double objFuncVal;
+                    if (firstInst) {
+                        firstInst = false;
+                        objFuncVal = Global.VEHICLE_COST + col.getCost()
+                                - col.daysHasCrash().stream().mapToDouble(lastIterResourcePrice::get).sum();
+                    } else {
+                        objFuncVal = Global.VEHICLE_COST + col.getCost();
+                    }
+                    // add the variable
+                    GRBVar var = lag.addVar(0, 1, objFuncVal, GRB.BINARY, grbColumn, null);
+                    columnWithTimingGRBVarMap.put(col, var);
+                }
+
+                lag.update();
+                needResolve = true;
+            }
+
+            if (needResolve) {
+                System.out.println("resolving the problem");
+                lag.optimize();
+                status = lag.get(GRB.IntAttr.Status);
+                if (status==GRB.OPTIMAL || status==GRB.TIME_LIMIT) {
+                    // used cols
+                    List<ColumnWithTiming> colsInSol = usedCol.stream().filter(col->{
+                        try {
+                            return columnWithTimingGRBVarMap.get(col).get(GRB.DoubleAttr.X)>0.5;
+                        } catch (GRBException e) {
+                            e.printStackTrace();
+                            return false;
+                        }
+                    }).collect(Collectors.toList());
+
+                    // compute the objval
+                    objVal += (usedCol.size()*Global.VEHICLE_COST + usedCol.stream().mapToDouble(ColumnWithTiming::getCost)
+                            .sum());
+
+                    // subtract the capacity
+                    colsInSol.forEach(col->col.daysHasCrash().forEach(d-> {
+                        int count = resourceUsedCounter.get(d);
+                        resourceUsedCounter.put(d, --count);
+                    }));
+
+                }
+
+            }
+
+            lag.dispose();
+
+
+        }
+
+        System.out.println("Obj val: " + objVal );
+
     }
 
 
@@ -296,7 +583,6 @@ public class MultipleColumnGenerationFacility implements Algorithm {
         }
 
         model.update();
-        model.addVar(0,1,1,GRB.CONTINUOUS,"test");
 
         // add variables
         for (String instID : initCols.keySet()) {

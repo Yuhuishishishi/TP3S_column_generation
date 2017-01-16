@@ -20,8 +20,8 @@ public class RunBranchAndPrice {
 
 
         // moderate
-        String filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate";
-        run(filePath, "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\logs\\branchandprice\\moderate");
+        String filePath = "C:\\Users\\yuhuishi\\PycharmProjects\\instance_generator\\instance\\moderate";
+        run(filePath, "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\logs\\branchandprice\\moderate\\");
 
         // small
 //        String filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\small";
@@ -29,8 +29,8 @@ public class RunBranchAndPrice {
 //
 //
 //        // large
-        filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\large";
-        run(filePath, "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\logs\\branchandprice\\large");
+//        filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\large";
+//        run(filePath, "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\logs\\branchandprice\\large");
 //
 //        String filePath = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\small\\_20_16_0.8_1.0.tp3s";
 //        runOneInstance(filePath);

@@ -32,7 +32,7 @@ public class RunNoFacilityVersion {
         instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\moderate";
         outDir = "./logs/fullenum/moderate";
 //        run(instanceDir, outDir, false);
-        runFullEnum(instanceDir, outDir);
+//        runFullEnum(instanceDir, outDir);
 
 //
 //        outDir = "./logs/facility/moderate/";
@@ -40,14 +40,15 @@ public class RunNoFacilityVersion {
 
 
         // large
-        instanceDir = "C:\\Users\\yuhuishi\\Desktop\\projects\\TP3S_column_generation\\instance\\large";
-        outDir = "./logs/fullenum/large";
+        instanceDir = "C:\\Users\\yuhuishi\\PycharmProjects\\instance_generator\\instance\\large";
+//        outDir = "./logs/fullenum/large";
 
-        runFullEnum(instanceDir, outDir);
+//        runFullEnum(instanceDir, outDir);
 //        run(instanceDir, outDir, false);
 
-//        outDir = "./logs/facility/large/";
-//        run(instanceDir, outDir, true);
+        outDir = "./logs/facility/large/";
+            run(instanceDir, outDir, true);
+
 
 
 
@@ -77,7 +78,12 @@ public class RunNoFacilityVersion {
 
                     long time = System.nanoTime();
 
-                    colgenSolver.solve();
+                    try {
+                        colgenSolver.solve();
+                    } catch (NullPointerException ex) {
+                        ex.printStackTrace();
+                        System.out.println("planning horizon problem, skip.");
+                    }
 
                     System.out.println("Time spent " + (System.nanoTime() - time) / 1e6 + "ms");
 

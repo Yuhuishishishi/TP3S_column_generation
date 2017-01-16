@@ -113,4 +113,31 @@ public class ColumnWithTiming extends Column {
         result = 31 * result + startTimeMap.hashCode();
         return result;
     }
+
+    public boolean isValid() {
+        // everything after vehicle release
+        boolean afterRelease = seq.stream().allMatch(tid->startTimeMap.get(tid) >= release);
+        boolean afterTestRelease = seq.stream().allMatch(tid->startTimeMap.get(tid)
+                >= DataInstance.getInstance(instID).getTestById(tid).getRelease());
+        boolean noOverlap = true;
+        int prevEnd = release;
+        for (Integer tid : seq) {
+            int start = startTimeMap.get(tid);
+            int dur = DataInstance.getInstance(instID).getTestById(tid).getDur();
+            if (start < prevEnd) {
+                noOverlap = false;
+                break;
+            }
+            prevEnd = start + dur;
+        }
+
+//        if (!afterRelease)
+//            System.out.println("after release");
+//        if (!afterTestRelease)
+//            System.out.println("after test release");
+//        if (!noOverlap)
+//            System.out.println("no overlap");
+
+        return afterRelease && afterTestRelease && noOverlap;
+    }
 }

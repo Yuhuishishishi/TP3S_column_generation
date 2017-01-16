@@ -19,7 +19,7 @@ import java.util.List;
  */
 public class FullEnumTest {
 
-    private final String filepath = "C:\\Users\\yuhuishi\\PycharmProjects\\instance_generator\\instance\\large\\l21_110_88_0.8_1.5.tp3s";
+    private final String filepath = "C:\\Users\\yuhuishi\\PycharmProjects\\instance_generator\\instance\\large\\l38_120_96_0.8_2.0.tp3s";
 
     @Test
     public void testGetTests() throws Exception {

@@ -85,8 +85,10 @@ public class InitColDetector implements WarmupAlgorithm{
 
                 // post process
                 return postProcess(usedCol);
-
             }
+
+            model.dispose();
+            env.dispose();
         } catch (GRBException | IloException e) {
             e.printStackTrace();
         }
@@ -199,6 +201,8 @@ public class InitColDetector implements WarmupAlgorithm{
             return usedCol.stream().map(column -> new ColumnWithTiming(column.getSeq(), column.getRelease()))
                     .collect(Collectors.toList());
         }
+
+
 
 
 
